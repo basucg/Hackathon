@@ -84,12 +84,11 @@
           <div id="detail-content" class="detail-content hidden">
             <header class="detail-header">
               <div>
-                <p class="subtitle" id="detail-model"></p>
+                <p class="subtitle" id="detail-unique-id"></p>
                 <h2 id="detail-name"></h2>
               </div>
               <span class="badge" id="detail-status"></span>
             </header>
-            <p class="muted" id="detail-mission"></p>
 
             <div class="tab-bar">
               <button class="tab-button active" data-tab="overview">Overview</button>
@@ -100,7 +99,7 @@
             </div>
 
             <section class="tab-panel" data-tab-panel="overview">
-              <dl class="stats" id="detail-stats"></dl>
+              <div class="stats" id="detail-stats"></div>
               <div class="detail-grid">
                 <form id="status-form" class="stack">
                   <div class="panel-title">
@@ -119,18 +118,19 @@
                   </div>
                   <div class="grid-2">
                     <label>
-                      Operation status
-                      <input id="operation-input" placeholder="patrolling" />
+                      Online substate
+                      <select id="operation-input">
+                        <option value="">Select substate</option>
+                        <option value="idle">Idle</option>
+                        <option value="charging">Charging</option>
+                        <option value="work">Work</option>
+                      </select>
                     </label>
                     <label>
                       Location
                       <input id="location-input" placeholder="Sector C" />
                     </label>
                   </div>
-                  <label>
-                    Mission
-                    <input id="mission-input" placeholder="Perimeter Patrol" />
-                  </label>
                   <label>
                     Notes
                     <textarea id="notes-input" rows="2" placeholder="Any anomalies or maintenance updates"></textarea>

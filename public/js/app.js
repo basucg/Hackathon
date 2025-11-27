@@ -40,8 +40,7 @@ const selectors = {
   detailContent: document.getElementById('detail-content'),
   detailEmpty: document.getElementById('detail-empty'),
   detailName: document.getElementById('detail-name'),
-  detailModel: document.getElementById('detail-model'),
-  detailMission: document.getElementById('detail-mission'),
+  detailUniqueId: document.getElementById('detail-unique-id'),
   detailStatus: document.getElementById('detail-status'),
   detailStats: document.getElementById('detail-stats'),
   detailCommandLog: document.getElementById('detail-command-log'),
@@ -50,7 +49,6 @@ const selectors = {
   signalInput: document.getElementById('signal-input'),
   operationInput: document.getElementById('operation-input'),
   locationInput: document.getElementById('location-input'),
-  missionInput: document.getElementById('mission-input'),
   notesInput: document.getElementById('notes-input'),
   tasksInput: document.getElementById('tasks-input'),
   uptimeInput: document.getElementById('uptime-input'),
@@ -86,6 +84,89 @@ const selectors = {
   otaHistoryList: document.getElementById('ota-history-list'),
   otaFailureToggle: document.getElementById('ota-failure-toggle'),
   themeToggle: document.getElementById('theme-toggle-input')
+};
+
+const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
+const DESIGN_MINDS_PATTERN = /^HACK_DESIGNMINDS_\d+$/;
+const ONLINE_SUBSTATES = new Set(['idle', 'charging', 'work']);
+
+const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
+
+const ensureDesignMindsId = (robot, index) => {
+  const providedId = [robot.designMindsId, robot.uniqueId].find(
+    (candidate) => typeof candidate === 'string' && DESIGN_MINDS_PATTERN.test(candidate)
+  );
+  if (providedId) {
+    return providedId;
+  }
+  const derivedNumber =
+    typeof robot.id === 'string' && robot.id.match(/\d+/)?.[0] ? robot.id.match(/\d+/)[0] : index + 1;
+  return `${DESIGN_MINDS_PREFIX}${derivedNumber}`;
+};
+
+const normalizeRobot = (robot, index) => ({
+  ...robot,
+  designMindsId: ensureDesignMindsId(robot, index)
+});
+
+const normalizeSubstate = (status = '') => {
+  const lower = status.toLowerCase();
+  return ONLINE_SUBSTATES.has(lower) ? lower : 'idle';
+};
+
+const deriveConnectivity = (robot) => {
+  const isOnline = (robot.signalStrength ?? 0) > 40 && (robot.batteryLevel ?? 0) > 15;
+  return {
+    isOnline,
+    substate: isOnline ? normalizeSubstate(robot.operationStatus) : null
+  };
+};
+
+const formatCoordinates = (location) =>
+  location?.lat !== undefined && location?.lng !== undefined
+    ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`
+    : '—';
+
+const formatHeartbeat = (value) => (value ? new Date(value).toLocaleString() : '—');
+const formatTimeOnly = (value) => (value ? new Date(value).toLocaleTimeString() : '—');
+const formatTemperature = (value) => (value !== undefined ? `${value} °C` : '—');
+const formatUptime = (value) => (value !== undefined ? `${value} h` : '—');
+
+const buildStatsRows = (stats) => {
+  if (!selectors.detailStats) return;
+  selectors.detailStats.innerHTML = '';
+  const headerRow = document.createElement('div');
+  headerRow.className = 'stats-row stats-row-headers';
+  const valueRow = document.createElement('div');
+  valueRow.className = 'stats-row stats-row-values';
+
+  stats.forEach(({ label, value }) => {
+    const headerCell = document.createElement('span');
+    headerCell.textContent = label;
+    headerRow.appendChild(headerCell);
+
+    const valueCell = document.createElement('span');
+    valueCell.textContent = value;
+    valueRow.appendChild(valueCell);
+  });
+
+  selectors.detailStats.append(headerRow, valueRow);
+};
+
+const renderOverviewStats = (robot) => {
+  if (!robot) return;
+  const insightData = state.insights[robot.id] || {};
+  const telemetryTime = insightData.telemetry?.timestamp || robot.lastHeartbeat;
+  const stats = [
+    { label: 'Battery', value: formatPercent(robot.batteryLevel) },
+    { label: 'Location coordinates', value: formatCoordinates(robot.insightsLocation) },
+    { label: 'Heartbeat', value: formatHeartbeat(robot.lastHeartbeat) },
+    { label: 'Location', value: robot.location || '—' },
+    { label: 'Time', value: formatTimeOnly(telemetryTime) },
+    { label: 'Uptime', value: formatUptime(robot.metrics?.uptimeHours) },
+    { label: 'Temperature', value: formatTemperature(robot.temperatureC) }
+  ];
+  buildStatsRows(stats);
 };
 
 const toJSON = async (response) => {
@@ -151,7 +232,6 @@ const setMessage = (el, message, type) => {
 };
 
 const formatPercent = (value) => (value !== undefined ? `${value}%` : '—');
-const formatNumber = (value) => (value !== undefined ? value : '—');
 
 const getSelectedRobot = () => state.robots.find((robot) => robot.id === state.selectedRobotId);
 
@@ -172,12 +252,15 @@ const renderFleetList = () => {
 
     const meta = document.createElement('div');
     meta.className = 'fleet-meta';
-    meta.innerHTML = `<strong>${robot.name}</strong><span>${robot.model}</span>`;
+    meta.innerHTML = `<strong>${robot.name}</strong><span class="robot-id">${robot.designMindsId}</span>`;
 
     const status = document.createElement('div');
-    const isOnline = (robot.signalStrength ?? 0) > 40 && (robot.batteryLevel ?? 0) > 15;
-    status.className = `fleet-status ${isOnline ? 'status-online' : 'status-offline'}`;
-    status.innerHTML = `<span class="status-dot"></span>${isOnline ? 'Online' : 'Offline'}`;
+    const connectivity = deriveConnectivity(robot);
+    status.className = `fleet-status ${connectivity.isOnline ? 'status-online' : 'status-offline'}`;
+    const statusLabel = connectivity.isOnline
+      ? `Online · ${capitalize(connectivity.substate)}`
+      : 'Offline';
+    status.innerHTML = `<span class="status-dot"></span>${statusLabel}`;
 
     const readings = document.createElement('div');
     readings.className = 'fleet-readings';
@@ -199,7 +282,7 @@ const renderFleetList = () => {
     state.selectedRobotId = state.robots[0]?.id ?? null;
   }
 
-  selectors.fleetCount.textContent = `${state.robots.length} robots online`;
+  selectors.fleetCount.textContent = `${state.robots.length} robots available`;
 };
 
 const renderDetail = () => {
@@ -214,32 +297,18 @@ const renderDetail = () => {
   selectors.detailContent.classList.remove('hidden');
 
   selectors.detailName.textContent = robot.name;
-  selectors.detailModel.textContent = robot.model;
-  selectors.detailMission.textContent = robot.mission || 'No mission assigned';
-  selectors.detailStatus.textContent = robot.operationStatus;
+  if (selectors.detailUniqueId) {
+    selectors.detailUniqueId.textContent = robot.designMindsId;
+  }
+  const connectivity = deriveConnectivity(robot);
+  const detailStatusLabel = connectivity.isOnline
+    ? `Online — ${capitalize(connectivity.substate)}`
+    : 'Offline';
+  selectors.detailStatus.textContent = detailStatusLabel;
+  selectors.detailStatus.classList.toggle('status-online', connectivity.isOnline);
+  selectors.detailStatus.classList.toggle('status-offline', !connectivity.isOnline);
 
-  const statMap = [
-    ['Battery', formatPercent(robot.batteryLevel)],
-    ['Temperature (°C)', formatNumber(robot.temperatureC)],
-    ['Uptime (hours)', formatNumber(robot.metrics?.uptimeHours)],
-    ['Last heartbeat', robot.lastHeartbeat ? new Date(robot.lastHeartbeat).toLocaleString() : '—'],
-    ['Last location', robot.location || '—'],
-    [
-      'Location coordinates',
-      robot.insightsLocation
-        ? `${robot.insightsLocation.lat.toFixed(4)}, ${robot.insightsLocation.lng.toFixed(4)}`
-        : '—'
-    ]
-  ];
-
-  selectors.detailStats.innerHTML = '';
-  statMap.forEach(([label, value]) => {
-    const dt = document.createElement('dt');
-    dt.textContent = label;
-    const dd = document.createElement('dd');
-    dd.textContent = value;
-    selectors.detailStats.append(dt, dd);
-  });
+  renderOverviewStats(robot);
 
   selectors.detailCommandLog.innerHTML = '';
   if (!robot.recentCommands?.length) {
@@ -269,7 +338,8 @@ const loadRobots = async () => {
   }
   selectors.refreshButton.disabled = true;
   try {
-    state.robots = await fetchRobots();
+    const robots = await fetchRobots();
+    state.robots = robots.map((robot, index) => normalizeRobot(robot, index));
     renderFleetList();
     renderDetail();
     updateTimestamp();
@@ -296,13 +366,11 @@ const loadInsightsForRobot = async (robotId) => {
 
 const collectStatusPayload = () => {
   const payload = {};
-  const { batteryInput, signalInput, operationInput, locationInput, missionInput, notesInput, tasksInput, uptimeInput } =
-    selectors;
+  const { batteryInput, signalInput, operationInput, locationInput, notesInput, tasksInput, uptimeInput } = selectors;
   if (batteryInput.value) payload.batteryLevel = Number(batteryInput.value);
   if (signalInput.value) payload.signalStrength = Number(signalInput.value);
   if (operationInput.value) payload.operationStatus = operationInput.value;
   if (locationInput.value) payload.location = locationInput.value;
-  if (missionInput.value) payload.mission = missionInput.value;
   if (notesInput.value) payload.notes = notesInput.value;
 
   const metrics = {};
@@ -548,8 +616,8 @@ const renderInsights = () => {
   if (!robot) return;
   const data = state.insights[robot.id];
   if (!data) return;
-  selectors.detailMission.textContent = data.telemetry?.missionStatus || robot.mission || 'No mission assigned';
   robot.insightsLocation = data.map?.lastKnownLocation;
+  renderOverviewStats(robot);
   if (selectors.teleopFeed && data.telemetry?.cameraFeedUrl) {
     selectors.teleopFeed.src = data.telemetry.cameraFeedUrl;
   }
