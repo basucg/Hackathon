@@ -1,5 +1,5 @@
-const { nanoid } = require('nanoid');
 const db = require('../db/client');
+const { generateId } = require('../utils/id');
 
 const defaultRobots = [
   {
@@ -107,7 +107,7 @@ const attachCommands = (robot) => {
 };
 
 const buildRobotRecord = (payload) => ({
-  id: payload.id ?? nanoid(8),
+  id: payload.id ?? generateId(12),
   name: payload.name,
   model: payload.model ?? 'Generic',
   batteryLevel: payload.batteryLevel ?? 100,
@@ -205,7 +205,7 @@ const recordRobotCommand = (id, payload) => {
   }
 
   const command = {
-    id: nanoid(10),
+    id: generateId(16),
     robotId: id,
     type: payload.type,
     value: payload.value,

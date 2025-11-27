@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
-const { nanoid } = require('nanoid');
 const db = require('../db/client');
+const { generateId } = require('../utils/id');
 
 const insertUserStmt = db.prepare(
   'INSERT INTO users (id, username, passwordHash, role) VALUES (@id, @username, @passwordHash, @role)'
@@ -24,7 +24,7 @@ const seedUsersIfEmpty = () => {
 
   const passwordHash = bcrypt.hashSync('robotops', 10);
   insertUserStmt.run({
-    id: nanoid(8),
+    id: generateId(12),
     username: 'robot-admin',
     passwordHash,
     role: 'admin'
@@ -55,7 +55,7 @@ const verifyCredentials = (username, password) => {
 };
 
 const createSession = (userId) => {
-  const token = nanoid(32);
+  const token = generateId(48);
   insertSessionStmt.run({
     token,
     userId,
