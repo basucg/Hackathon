@@ -1,10 +1,10 @@
 const {
-  getRobots,
+  listRobots: getRobots,
   getRobotById,
   createRobot,
   updateRobotStatus,
   recordRobotCommand
-} = require('../store/robotStore');
+} = require('../repositories/robotRepository');
 
 const safeNumber = (value) => {
   const parsed = Number(value);

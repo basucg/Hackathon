@@ -4,7 +4,7 @@ Operational dashboard and JSON API for tracking robot telemetry, sending manual 
 
 ## Features
 - REST API to read the fleet, patch robot telemetry, and queue commands (direction, maintenance, etc.)
-- In-memory robot registry with seeded demo bots (Atlas, Scout, Lifter)
+- SQLite-backed robot registry with seeded demo bots (Atlas, Scout, Lifter) persisted to `data/robots.db`
 - Realtime-inspired web UI (vanilla HTML/CSS/JS) that shows battery, signal, operations, and recent commands
 - Status uplink form to push telemetry from the console
 - Direction pad and custom command form to steer robots or trigger workflows
@@ -47,6 +47,11 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
   -H "Content-Type: application/json" \
   -d '{ "type": "direction", "value": "north" }'
 ```
+
+## Data storage
+- Robot metadata and command history live in a SQLite file at `data/robots.db` (automatically created).
+- Seed robots are inserted the first time the DB is empty; delete the file to reset the environment.
+- Use any SQLite browser to inspect the tables (`robots`, `robot_commands`) if you need direct access.
 
 ## Frontend workflow
 1. Hit **Refresh Telemetry** to pull the latest API response.
