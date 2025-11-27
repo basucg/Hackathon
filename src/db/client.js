@@ -75,11 +75,11 @@ const ensureColumn = (table, column, definition) => {
   }
 };
 
-ensureColumn('robots', "identifier TEXT");
-ensureColumn('robots', "status TEXT DEFAULT 'offline'");
-ensureColumn('robots', "subStatus TEXT");
-ensureColumn('robots', 'latitude REAL');
-ensureColumn('robots', 'longitude REAL');
-ensureColumn('robots', 'lastKnownAt TEXT');
+ensureColumn('robots', 'identifier', 'identifier TEXT');
+ensureColumn('robots', 'status', "status TEXT DEFAULT 'offline'");
+ensureColumn('robots', 'subStatus', 'subStatus TEXT');
+ensureColumn('robots', 'latitude', 'latitude REAL');
+ensureColumn('robots', 'longitude', 'longitude REAL');
+ensureColumn('robots', 'lastKnownAt', 'lastKnownAt TEXT');
 
 module.exports = db;
