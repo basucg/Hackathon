@@ -50,6 +50,7 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
 
 ## Frontend workflow
 1. Hit **Refresh Telemetry** to pull the latest API response.
-2. Use **Status uplink** to push manual readings (battery, signal, mission, notes, metrics).
-3. Use the **Command center** to steer with the direction pad or send arbitrary commands (with optional JSON metadata).
-4. Monitor each robot card for live stats and a rolling command history (10 latest events).
+2. Click any robot in the fleet list to load its detail view.
+3. Use **Status uplink** to push manual readings (battery, signal, mission, notes, metrics).
+4. Use the **Command center** to steer with the direction pad or send arbitrary commands (with optional JSON metadata).
+5. Review the command log in the detail panel to confirm queued actions (last 10 entries).

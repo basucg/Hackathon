@@ -1,14 +1,22 @@
 const state = {
-  robots: []
+  robots: [],
+  selectedRobotId: null
 };
 
 const selectors = {
-  robotsContainer: document.getElementById('robots-container'),
+  fleetList: document.getElementById('fleet-list'),
   fleetCount: document.getElementById('fleet-count'),
   refreshButton: document.getElementById('refresh-btn'),
   lastRefresh: document.getElementById('last-refresh'),
+  detailContent: document.getElementById('detail-content'),
+  detailEmpty: document.getElementById('detail-empty'),
+  detailName: document.getElementById('detail-name'),
+  detailModel: document.getElementById('detail-model'),
+  detailMission: document.getElementById('detail-mission'),
+  detailStatus: document.getElementById('detail-status'),
+  detailStats: document.getElementById('detail-stats'),
+  detailCommandLog: document.getElementById('detail-command-log'),
   statusForm: document.getElementById('status-form'),
-  statusRobotSelect: document.getElementById('status-robot-select'),
   batteryInput: document.getElementById('battery-input'),
   signalInput: document.getElementById('signal-input'),
   operationInput: document.getElementById('operation-input'),
@@ -18,13 +26,12 @@ const selectors = {
   tasksInput: document.getElementById('tasks-input'),
   uptimeInput: document.getElementById('uptime-input'),
   statusMessage: document.getElementById('status-message'),
-  commandRobotSelect: document.getElementById('command-robot-select'),
   commandTypeInput: document.getElementById('command-type-input'),
   commandValueInput: document.getElementById('command-value-input'),
   commandMetaInput: document.getElementById('command-meta-input'),
   commandMessage: document.getElementById('command-message'),
   directionPad: document.querySelector('.direction-pad'),
-  robotCardTemplate: document.getElementById('robot-card-template')
+  customCommandForm: document.getElementById('custom-command-form')
 };
 
 const toJSON = async (response) => {
@@ -50,75 +57,97 @@ const setMessage = (el, message, type) => {
 const formatPercent = (value) => (value !== undefined ? `${value}%` : '—');
 const formatNumber = (value) => (value !== undefined ? value : '—');
 
-const renderRobotCard = (robot) => {
-  const { robotCardTemplate } = selectors;
-  const clone = robotCardTemplate.content.firstElementChild.cloneNode(true);
-  clone.querySelector('h3').textContent = robot.name;
-  clone.querySelector('.subtitle').textContent = `${robot.model} • ${robot.mission}`;
+const getSelectedRobot = () => state.robots.find((robot) => robot.id === state.selectedRobotId);
 
-  const badge = clone.querySelector('.badge');
-  badge.textContent = robot.operationStatus;
-  badge.style.background = robot.operationStatus === 'idle' ? 'rgba(46, 194, 126, 0.1)' : 'rgba(247, 162, 97, 0.1)';
-  badge.style.color = robot.operationStatus === 'idle' ? '#2ec27e' : '#f4a261';
+const selectRobot = (robotId) => {
+  state.selectedRobotId = robotId;
+  renderFleetList();
+  renderDetail();
+};
 
-  const stats = clone.querySelector('.stats');
+const renderFleetList = () => {
+  selectors.fleetList.innerHTML = '';
+  state.robots.forEach((robot, index) => {
+    const item = document.createElement('li');
+    item.className = `fleet-item${robot.id === state.selectedRobotId ? ' active' : ''}`;
+    item.dataset.id = robot.id;
+
+    const meta = document.createElement('div');
+    meta.className = 'fleet-meta';
+    meta.innerHTML = `<strong>${robot.name}</strong><span>${robot.model}</span>`;
+
+    const readings = document.createElement('div');
+    readings.className = 'fleet-readings';
+    readings.innerHTML = `
+      <span>Battery: ${formatPercent(robot.batteryLevel)}</span>
+      <span>Signal: ${formatPercent(robot.signalStrength)}</span>
+    `;
+
+    item.append(meta, readings);
+    item.addEventListener('click', () => selectRobot(robot.id));
+    selectors.fleetList.appendChild(item);
+
+    if (index === 0 && !state.selectedRobotId) {
+      state.selectedRobotId = robot.id;
+    }
+  });
+
+  if (state.selectedRobotId && !state.robots.some((robot) => robot.id === state.selectedRobotId)) {
+    state.selectedRobotId = state.robots[0]?.id ?? null;
+  }
+
+  selectors.fleetCount.textContent = `${state.robots.length} robots online`;
+};
+
+const renderDetail = () => {
+  const robot = getSelectedRobot();
+  if (!robot) {
+    selectors.detailContent.classList.add('hidden');
+    selectors.detailEmpty.classList.remove('hidden');
+    return;
+  }
+
+  selectors.detailEmpty.classList.add('hidden');
+  selectors.detailContent.classList.remove('hidden');
+
+  selectors.detailName.textContent = robot.name;
+  selectors.detailModel.textContent = robot.model;
+  selectors.detailMission.textContent = robot.mission || 'No mission assigned';
+  selectors.detailStatus.textContent = robot.operationStatus;
+
   const statMap = [
     ['Battery', formatPercent(robot.batteryLevel)],
     ['Signal', formatPercent(robot.signalStrength)],
-    ['Location', robot.location],
-    ['Temp (°C)', formatNumber(robot.temperatureC)],
-    ['Tasks', formatNumber(robot.metrics?.tasksCompleted)],
-    ['Uptime (h)', formatNumber(robot.metrics?.uptimeHours)],
-    ['Last heartbeat', new Date(robot.lastHeartbeat).toLocaleTimeString()],
+    ['Temperature (°C)', formatNumber(robot.temperatureC)],
+    ['Location', robot.location || '—'],
+    ['Tasks completed', formatNumber(robot.metrics?.tasksCompleted)],
+    ['Uptime (hours)', formatNumber(robot.metrics?.uptimeHours)],
+    ['Last heartbeat', robot.lastHeartbeat ? new Date(robot.lastHeartbeat).toLocaleString() : '—'],
     ['Notes', robot.notes || '—']
   ];
 
+  selectors.detailStats.innerHTML = '';
   statMap.forEach(([label, value]) => {
     const dt = document.createElement('dt');
     dt.textContent = label;
     const dd = document.createElement('dd');
     dd.textContent = value;
-    stats.append(dt, dd);
+    selectors.detailStats.append(dt, dd);
   });
 
-  const commandList = clone.querySelector('.command-log ul');
+  selectors.detailCommandLog.innerHTML = '';
   if (!robot.recentCommands?.length) {
-    const li = document.createElement('li');
-    li.textContent = 'No commands issued yet.';
-    commandList.appendChild(li);
+    const emptyLi = document.createElement('li');
+    emptyLi.textContent = 'No commands issued yet.';
+    selectors.detailCommandLog.appendChild(emptyLi);
   } else {
     robot.recentCommands.forEach((command) => {
       const li = document.createElement('li');
       const time = new Date(command.issuedAt).toLocaleTimeString();
       li.textContent = `[${time}] ${command.type}: ${command.value}`;
-      commandList.appendChild(li);
+      selectors.detailCommandLog.appendChild(li);
     });
   }
-
-  return clone;
-};
-
-const populateSelect = (selectEl, robots) => {
-  selectEl.innerHTML = '';
-  robots.forEach((robot, index) => {
-    const option = document.createElement('option');
-    option.value = robot.id;
-    option.textContent = `${robot.name} (${robot.model})`;
-    if (index === 0) {
-      option.selected = true;
-    }
-    selectEl.appendChild(option);
-  });
-};
-
-const renderRobots = () => {
-  selectors.robotsContainer.innerHTML = '';
-  state.robots.forEach((robot) => {
-    selectors.robotsContainer.appendChild(renderRobotCard(robot));
-  });
-  selectors.fleetCount.textContent = `${state.robots.length} robots online`;
-  populateSelect(selectors.statusRobotSelect, state.robots);
-  populateSelect(selectors.commandRobotSelect, state.robots);
 };
 
 const updateTimestamp = () => {
@@ -129,7 +158,8 @@ const loadRobots = async () => {
   selectors.refreshButton.disabled = true;
   try {
     state.robots = await fetchRobots();
-    renderRobots();
+    renderFleetList();
+    renderDetail();
     updateTimestamp();
   } catch (error) {
     alert(`Failed to load robots: ${error.message}`);
@@ -161,13 +191,16 @@ const collectStatusPayload = () => {
 
 const sendStatusUpdate = async (event) => {
   event.preventDefault();
-  const robotId = selectors.statusRobotSelect.value;
+  const robot = getSelectedRobot();
+  if (!robot) {
+    return setMessage(selectors.statusMessage, 'Select a robot first.', 'error');
+  }
   const payload = collectStatusPayload();
   if (!Object.keys(payload).length) {
     return setMessage(selectors.statusMessage, 'Add at least one field to update.', 'error');
   }
   try {
-    const response = await fetch(`/api/robots/${robotId}/status`, {
+    const response = await fetch(`/api/robots/${robot.id}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -203,12 +236,13 @@ const handleDirection = async (event) => {
   const { direction } = event.target.dataset;
   if (!direction) return;
   event.preventDefault();
-  if (!selectors.commandRobotSelect.value) {
+  const robot = getSelectedRobot();
+  if (!robot) {
     return setMessage(selectors.commandMessage, 'Select a robot first.', 'error');
   }
   try {
     await sendCommand({
-      robotId: selectors.commandRobotSelect.value,
+      robotId: robot.id,
       type: 'direction',
       value: direction
     });
@@ -221,8 +255,8 @@ const handleDirection = async (event) => {
 
 const sendCustomCommand = async (event) => {
   event.preventDefault();
-  const robotId = selectors.commandRobotSelect.value;
-  if (!robotId) {
+  const robot = getSelectedRobot();
+  if (!robot) {
     return setMessage(selectors.commandMessage, 'Select a robot first.', 'error');
   }
   const type = selectors.commandTypeInput.value.trim();
@@ -238,7 +272,7 @@ const sendCustomCommand = async (event) => {
   }
   try {
     await sendCommand({
-      robotId,
+      robotId: robot.id,
       type,
       value,
       metadata
@@ -256,6 +290,6 @@ const sendCustomCommand = async (event) => {
 selectors.refreshButton.addEventListener('click', loadRobots);
 selectors.statusForm.addEventListener('submit', sendStatusUpdate);
 selectors.directionPad.addEventListener('click', handleDirection);
-document.getElementById('custom-command-form').addEventListener('submit', sendCustomCommand);
+selectors.customCommandForm.addEventListener('submit', sendCustomCommand);
 
 loadRobots();

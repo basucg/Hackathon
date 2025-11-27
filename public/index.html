@@ -16,10 +16,9 @@
     <header class="hero">
       <div>
         <p class="eyebrow">Rebot Management Cloud</p>
-        <h1>Monitor, update, and steer every robot from one console.</h1>
+        <h1>Fleet-wide visibility with single-robot precision.</h1>
         <p class="lede">
-          Live status streaming, manual overrides, and directional controls for Atlas, Scout,
-          Lifter, and any new field robot you add to the fleet.
+          Scan every robot at a glance, then deep dive into telemetry and controls with one click.
         </p>
       </div>
       <div class="hero-actions">
@@ -28,127 +27,121 @@
       </div>
     </header>
 
-    <main>
-      <section class="panel">
+    <main class="app-layout">
+      <section class="panel fleet-panel">
         <div class="panel-title">
-          <h2>Fleet telemetry</h2>
+          <h2>Fleet overview</h2>
           <span class="badge" id="fleet-count">0 robots online</span>
         </div>
-        <div id="robots-container" class="robot-grid"></div>
+        <ul id="fleet-list" class="fleet-list"></ul>
       </section>
 
-      <section class="two-column">
-        <article class="panel">
-          <div class="panel-title">
-            <h2>Status uplink</h2>
-            <p>Inject manual telemetry when a robot reports new readings.</p>
-          </div>
-          <form id="status-form" class="stack">
-            <label>
-              Robot
-              <select id="status-robot-select" required></select>
-            </label>
-            <div class="grid-2">
-              <label>
-                Battery %
-                <input type="number" id="battery-input" min="0" max="100" placeholder="82" />
-              </label>
-              <label>
-                Signal %
-                <input type="number" id="signal-input" min="0" max="100" placeholder="95" />
-              </label>
+      <section class="panel detail-panel">
+        <div id="detail-empty" class="empty-state">
+          <h2>Select a robot</h2>
+          <p>Choose a unit from the fleet list to inspect telemetry and send commands.</p>
+        </div>
+        <div id="detail-content" class="detail-content hidden">
+          <header class="detail-header">
+            <div>
+              <p class="subtitle" id="detail-model"></p>
+              <h2 id="detail-name"></h2>
             </div>
-            <div class="grid-2">
-              <label>
-                Operation status
-                <input id="operation-input" placeholder="patrolling" />
-              </label>
-              <label>
-                Location
-                <input id="location-input" placeholder="Sector C" />
-              </label>
-            </div>
-            <label>
-              Mission
-              <input id="mission-input" placeholder="Perimeter patrol" />
-            </label>
-            <label>
-              Notes
-              <textarea id="notes-input" rows="2" placeholder="Any anomalies or maintenance updates"></textarea>
-            </label>
-            <div class="grid-2">
-              <label>
-                Tasks completed
-                <input type="number" id="tasks-input" min="0" placeholder="184" />
-              </label>
-              <label>
-                Uptime hours
-                <input type="number" id="uptime-input" min="0" placeholder="412" />
-              </label>
-            </div>
-            <button class="primary" type="submit">Push status update</button>
-            <p class="helptext" id="status-message"></p>
-          </form>
-        </article>
+            <span class="badge" id="detail-status"></span>
+          </header>
+          <p class="muted" id="detail-mission"></p>
+          <dl class="stats" id="detail-stats"></dl>
 
-        <article class="panel">
-          <div class="panel-title">
-            <h2>Command center</h2>
-            <p>Steer robots with directional controls or custom commands.</p>
-          </div>
-          <div class="stack">
-            <label>
-              Robot
-              <select id="command-robot-select" required></select>
-            </label>
-            <div class="direction-pad">
-              <button data-direction="north">▲</button>
-              <div class="middle-row">
-                <button data-direction="west">◀</button>
-                <button data-direction="stop" class="stop">■</button>
-                <button data-direction="east">▶</button>
+          <div class="detail-grid">
+            <form id="status-form" class="stack">
+              <div class="panel-title">
+                <h3>Status uplink</h3>
+                <p class="muted">Inject telemetry overrides.</p>
               </div>
-              <button data-direction="south">▼</button>
-            </div>
-            <form id="custom-command-form" class="stack">
               <div class="grid-2">
                 <label>
-                  Command type
-                  <input id="command-type-input" placeholder="direction | maintenance" />
+                  Battery %
+                  <input type="number" id="battery-input" min="0" max="100" placeholder="82" />
                 </label>
                 <label>
-                  Value
-                  <input id="command-value-input" placeholder="north | reboot | resume" />
+                  Signal %
+                  <input type="number" id="signal-input" min="0" max="100" placeholder="95" />
+                </label>
+              </div>
+              <div class="grid-2">
+                <label>
+                  Operation status
+                  <input id="operation-input" placeholder="patrolling" />
+                </label>
+                <label>
+                  Location
+                  <input id="location-input" placeholder="Sector C" />
                 </label>
               </div>
               <label>
-                Metadata JSON (optional)
-                <textarea id="command-meta-input" rows="2" placeholder='{"speed":0.4}'></textarea>
+                Mission
+                <input id="mission-input" placeholder="Perimeter Patrol" />
               </label>
-              <button class="secondary" type="submit">Send custom command</button>
-              <p class="helptext" id="command-message"></p>
+              <label>
+                Notes
+                <textarea id="notes-input" rows="2" placeholder="Any anomalies or maintenance updates"></textarea>
+              </label>
+              <div class="grid-2">
+                <label>
+                  Tasks completed
+                  <input type="number" id="tasks-input" min="0" placeholder="184" />
+                </label>
+                <label>
+                  Uptime hours
+                  <input type="number" id="uptime-input" min="0" placeholder="412" />
+                </label>
+              </div>
+              <button class="primary" type="submit">Push status update</button>
+              <p class="helptext" id="status-message"></p>
             </form>
+
+            <div class="stack command-panel">
+              <div class="panel-title">
+                <h3>Command center</h3>
+                <p class="muted">Steer directions or issue custom payloads.</p>
+              </div>
+              <div class="direction-pad">
+                <button data-direction="north">▲</button>
+                <div class="middle-row">
+                  <button data-direction="west">◀</button>
+                  <button data-direction="stop" class="stop">■</button>
+                  <button data-direction="east">▶</button>
+                </div>
+                <button data-direction="south">▼</button>
+              </div>
+              <form id="custom-command-form" class="stack">
+                <div class="grid-2">
+                  <label>
+                    Command type
+                    <input id="command-type-input" placeholder="direction | maintenance" />
+                  </label>
+                  <label>
+                    Value
+                    <input id="command-value-input" placeholder="north | reboot | resume" />
+                  </label>
+                </div>
+                <label>
+                  Metadata JSON (optional)
+                  <textarea id="command-meta-input" rows="2" placeholder='{"speed":0.4}'></textarea>
+                </label>
+                <button class="secondary" type="submit">Send custom command</button>
+                <p class="helptext" id="command-message"></p>
+              </form>
+            </div>
           </div>
-        </article>
+
+          <div class="command-log">
+            <h3>Recent commands</h3>
+            <ul id="detail-command-log"></ul>
+          </div>
+        </div>
       </section>
     </main>
-
-    <template id="robot-card-template">
-      <article class="robot-card">
-        <header>
-          <div>
-            <h3></h3>
-            <p class="subtitle"></p>
-          </div>
-          <span class="badge"></span>
-        </header>
-        <dl class="stats"></dl>
-        <div class="command-log">
-          <h4>Recent commands</h4>
-          <ul></ul>
-        </div>
-      </article>
-    </template>
 
     <script src="/js/app.js" type="module" defer></script>
   </body>
