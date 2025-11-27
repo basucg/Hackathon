@@ -3,12 +3,16 @@
 Operational dashboard and JSON API for tracking robot telemetry, sending manual status updates, and dispatching directional commands.
 
 ## Features
-- REST API to read the fleet, patch robot telemetry, and queue commands (direction, maintenance, etc.)
+- REST API to read the fleet, patch robot telemetry, stream insights, and queue commands (direction, mode, OTA, etc.)
 - SQLite-backed robot registry with seeded demo bots (Atlas, Scout, Lifter) persisted to `data/robots.db`
 - Secure login gate with session tokens so only approved operators can access controls
-- Realtime-inspired web UI (vanilla HTML/CSS/JS) that shows battery, signal, operations, and recent commands
-- Status uplink form to push telemetry from the console
-- Direction pad and custom command form to steer robots or trigger workflows
+- Live cloud console tabs:
+  - **Overview** – status uplink, command log, telemetry stats
+  - **Teleop** – camera feed placeholder, joystick pad, mode/speed controls, custom commands
+  - **Map & Path** – Leaflet map with trail + geofence overlay, velocity/acceleration charts (Chart.js)
+  - **Health** – motor/CPU/battery indicators, diagnostics, alert log
+  - **OTA Update** – firmware metadata, upload simulator, progress log
+- Direction pad, command panel, and messaging surface to send mode changes or OTA triggers
 
 ## Getting started
 ```bash
@@ -29,6 +33,9 @@ The server listens on `http://localhost:3000` by default. The UI is served from 
 | GET    | `/api/robots/:id`          | Fetch a single robot                   |
 | PUT    | `/api/robots/:id/status`   | Update telemetry (battery, status, …)  |
 | POST   | `/api/robots/:id/commands` | Queue a command (direction/other)      |
+| GET    | `/api/robots/:id/insights` | Retrieve map/kinematics/health mock data |
+| POST   | `/api/robots/:id/mode`     | Change drive mode + target speed       |
+| POST   | `/api/robots/:id/ota`      | Simulate an over-the-air firmware push |
 
 ### Sample: update telemetry
 ```bash
@@ -60,8 +67,13 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
 - Use the **Logout** button or delete `localStorage.rebotToken` to end a session; tokens also become invalid if removed from the `sessions` table.
 
 ## Frontend workflow
-1. Hit **Refresh Telemetry** to pull the latest API response.
-2. Click any robot in the fleet list to load its detail view.
-3. Use **Status uplink** to push manual readings (battery, signal, mission, notes, metrics).
-4. Use the **Command center** to steer with the direction pad or send arbitrary commands (with optional JSON metadata).
-5. Review the command log in the detail panel to confirm queued actions (last 10 entries).
+1. Sign in (`robot-admin` / `robotops`) to unlock the console. Tokens persist in `localStorage`.
+2. Hit **Refresh Telemetry** to pull the latest API response.
+3. Click any robot card to load its multi-tab detail view.
+4. Tabs:
+   - **Overview** – push manual readings, inspect recent commands.
+   - **Teleop** – drive with the pad, tweak speed, change modes, watch the simulated feed.
+   - **Map & Path** – explore location trails, geofence overlays, velocity/acc charts.
+   - **Health** – monitor motor temp, CPU load, battery cycles, faults.
+   - **OTA Update** – enter a version + file, watch the progress log as the mock upgrade runs.
+5. Use the command log + health alerts to narrate your demo (“collision detected”, “mode switched to autonomous”, etc.).

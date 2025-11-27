@@ -11,6 +11,18 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/css/styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-o9N1j7kGStGf2z8JcpnFd1XgY3Tz5v4a0u5r0aoz3YQ="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-XQoYMqMTK8LvdlxU/3AP3S3kfzLkFf1Q4Zp8a0A0Bbw="
+      defer
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
   </head>
   <body>
     <section id="login-view" class="auth-view">
@@ -72,95 +84,197 @@
               <span class="badge" id="detail-status"></span>
             </header>
             <p class="muted" id="detail-mission"></p>
-            <dl class="stats" id="detail-stats"></dl>
 
-            <div class="detail-grid">
-              <form id="status-form" class="stack">
-                <div class="panel-title">
-                  <h3>Status uplink</h3>
-                  <p class="muted">Inject telemetry overrides.</p>
-                </div>
-                <div class="grid-2">
-                  <label>
-                    Battery %
-                    <input type="number" id="battery-input" min="0" max="100" placeholder="82" />
-                  </label>
-                  <label>
-                    Signal %
-                    <input type="number" id="signal-input" min="0" max="100" placeholder="95" />
-                  </label>
-                </div>
-                <div class="grid-2">
-                  <label>
-                    Operation status
-                    <input id="operation-input" placeholder="patrolling" />
-                  </label>
-                  <label>
-                    Location
-                    <input id="location-input" placeholder="Sector C" />
-                  </label>
-                </div>
-                <label>
-                  Mission
-                  <input id="mission-input" placeholder="Perimeter Patrol" />
-                </label>
-                <label>
-                  Notes
-                  <textarea id="notes-input" rows="2" placeholder="Any anomalies or maintenance updates"></textarea>
-                </label>
-                <div class="grid-2">
-                  <label>
-                    Tasks completed
-                    <input type="number" id="tasks-input" min="0" placeholder="184" />
-                  </label>
-                  <label>
-                    Uptime hours
-                    <input type="number" id="uptime-input" min="0" placeholder="412" />
-                  </label>
-                </div>
-                <button class="primary" type="submit">Push status update</button>
-                <p class="helptext" id="status-message"></p>
-              </form>
+            <div class="tab-bar">
+              <button class="tab-button active" data-tab="overview">Overview</button>
+              <button class="tab-button" data-tab="teleop">Teleop</button>
+              <button class="tab-button" data-tab="map">Map & Path</button>
+              <button class="tab-button" data-tab="health">Health</button>
+              <button class="tab-button" data-tab="ota">OTA Update</button>
+            </div>
 
-              <div class="stack command-panel">
-                <div class="panel-title">
-                  <h3>Command center</h3>
-                  <p class="muted">Steer directions or issue custom payloads.</p>
-                </div>
-                <div class="direction-pad">
-                  <button data-direction="north">▲</button>
-                  <div class="middle-row">
-                    <button data-direction="west">◀</button>
-                    <button data-direction="stop" class="stop">■</button>
-                    <button data-direction="east">▶</button>
+            <section class="tab-panel" data-tab-panel="overview">
+              <dl class="stats" id="detail-stats"></dl>
+              <div class="detail-grid">
+                <form id="status-form" class="stack">
+                  <div class="panel-title">
+                    <h3>Status uplink</h3>
+                    <p class="muted">Inject telemetry overrides.</p>
                   </div>
-                  <button data-direction="south">▼</button>
-                </div>
-                <form id="custom-command-form" class="stack">
                   <div class="grid-2">
                     <label>
-                      Command type
-                      <input id="command-type-input" placeholder="direction | maintenance" />
+                      Battery %
+                      <input type="number" id="battery-input" min="0" max="100" placeholder="82" />
                     </label>
                     <label>
-                      Value
-                      <input id="command-value-input" placeholder="north | reboot | resume" />
+                      Signal %
+                      <input type="number" id="signal-input" min="0" max="100" placeholder="95" />
+                    </label>
+                  </div>
+                  <div class="grid-2">
+                    <label>
+                      Operation status
+                      <input id="operation-input" placeholder="patrolling" />
+                    </label>
+                    <label>
+                      Location
+                      <input id="location-input" placeholder="Sector C" />
                     </label>
                   </div>
                   <label>
-                    Metadata JSON (optional)
-                    <textarea id="command-meta-input" rows="2" placeholder='{"speed":0.4}'></textarea>
+                    Mission
+                    <input id="mission-input" placeholder="Perimeter Patrol" />
                   </label>
-                  <button class="secondary" type="submit">Send custom command</button>
-                  <p class="helptext" id="command-message"></p>
+                  <label>
+                    Notes
+                    <textarea id="notes-input" rows="2" placeholder="Any anomalies or maintenance updates"></textarea>
+                  </label>
+                  <div class="grid-2">
+                    <label>
+                      Tasks completed
+                      <input type="number" id="tasks-input" min="0" placeholder="184" />
+                    </label>
+                    <label>
+                      Uptime hours
+                      <input type="number" id="uptime-input" min="0" placeholder="412" />
+                    </label>
+                  </div>
+                  <button class="primary" type="submit">Push status update</button>
+                  <p class="helptext" id="status-message"></p>
+                </form>
+                <div class="command-log">
+                  <h3>Recent commands</h3>
+                  <ul id="detail-command-log"></ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="tab-panel hidden" data-tab-panel="teleop">
+              <div class="teleop-grid">
+                <div class="video-panel">
+                  <video id="teleop-feed" autoplay loop muted playsinline poster="https://storage.googleapis.com/robot-demo-assets/teleop-poster.jpg">
+                    <source src="https://storage.googleapis.com/robot-demo-assets/patrol-feed.mp4" type="video/mp4" />
+                  </video>
+                  <p class="muted small">Simulated camera feed</p>
+                </div>
+                <div class="stack command-panel">
+                  <div class="panel-title">
+                    <h3>Drive console</h3>
+                    <p class="muted">Directional pad + speed control</p>
+                  </div>
+                  <div class="direction-pad">
+                    <button data-direction="north">▲</button>
+                    <div class="middle-row">
+                      <button data-direction="west">◀</button>
+                      <button data-direction="stop" class="stop">■</button>
+                      <button data-direction="east">▶</button>
+                    </div>
+                    <button data-direction="south">▼</button>
+                  </div>
+                  <label>
+                    Speed (m/s)
+                    <input type="range" id="speed-slider" min="0" max="2" step="0.1" value="0.8" />
+                  </label>
+                  <div class="mode-buttons">
+                    <button data-mode="teleop">Teleop</button>
+                    <button data-mode="autonomous">Autonomous</button>
+                    <button data-mode="hold">Hold Position</button>
+                  </div>
+                  <form id="custom-command-form" class="stack">
+                    <div class="grid-2">
+                      <label>
+                        Command type
+                        <input id="command-type-input" placeholder="direction | maintenance" />
+                      </label>
+                      <label>
+                        Value
+                        <input id="command-value-input" placeholder="north | reboot | resume" />
+                      </label>
+                    </div>
+                    <label>
+                      Metadata JSON (optional)
+                      <textarea id="command-meta-input" rows="2" placeholder='{"speed":0.4}'></textarea>
+                    </label>
+                    <button class="secondary" type="submit">Send custom command</button>
+                    <p class="helptext" id="command-message"></p>
+                  </form>
+                </div>
+              </div>
+            </section>
+
+            <section class="tab-panel hidden" data-tab-panel="map">
+              <div class="map-grid">
+                <div class="map-card">
+                  <h3>Path history</h3>
+                  <div id="map-view"></div>
+                </div>
+                <div class="path-log">
+                  <h3>Geofence & path log</h3>
+                  <ul id="path-log-list"></ul>
+                </div>
+              </div>
+              <div class="chart-grid">
+                <div>
+                  <h4>Velocity</h4>
+                  <canvas id="velocity-chart" height="120"></canvas>
+                </div>
+                <div>
+                  <h4>Acceleration</h4>
+                  <canvas id="acceleration-chart" height="120"></canvas>
+                </div>
+              </div>
+            </section>
+
+            <section class="tab-panel hidden" data-tab-panel="health">
+              <div class="health-grid">
+                <article class="health-card">
+                  <h3>Motor temperature</h3>
+                  <p class="health-value" id="health-motor-temp">-- °C</p>
+                </article>
+                <article class="health-card">
+                  <h3>CPU usage</h3>
+                  <p class="health-value" id="health-cpu">-- %</p>
+                </article>
+                <article class="health-card">
+                  <h3>Battery cycles</h3>
+                  <p class="health-value" id="health-battery">-- cycles</p>
+                </article>
+              </div>
+              <div class="diagnostic-list">
+                <h4>Diagnostics</h4>
+                <ul id="diagnostic-list"></ul>
+              </div>
+              <div class="alert-list">
+                <h4>Alerts</h4>
+                <ul id="alert-list"></ul>
+              </div>
+            </section>
+
+            <section class="tab-panel hidden" data-tab-panel="ota">
+              <div class="ota-grid">
+                <div>
+                  <h3>Firmware status</h3>
+                  <p><strong>Current:</strong> <span id="ota-current">--</span></p>
+                  <p><strong>Available:</strong> <span id="ota-available">--</span></p>
+                  <p><strong>Last update:</strong> <span id="ota-last-update">--</span></p>
+                </div>
+                <form id="ota-form" class="stack">
+                  <label>
+                    Target version
+                    <input id="ota-version-input" placeholder="v1.4.0" />
+                  </label>
+                  <label class="file-input">
+                    Firmware file
+                    <input id="ota-file-input" type="file" />
+                  </label>
+                  <button class="primary" type="submit">Push OTA update</button>
                 </form>
               </div>
-            </div>
-
-            <div class="command-log">
-              <h3>Recent commands</h3>
-              <ul id="detail-command-log"></ul>
-            </div>
+              <div class="ota-log">
+                <h4>Update progress</h4>
+                <ul id="ota-log-list"></ul>
+              </div>
+            </section>
           </div>
         </section>
       </main>

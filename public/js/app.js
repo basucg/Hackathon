@@ -1,12 +1,29 @@
 const state = {
   robots: [],
-  selectedRobotId: null
+  selectedRobotId: null,
+  activeTab: 'overview',
+  insights: {}
 };
 
 const auth = {
   token: localStorage.getItem('rebotToken') || null,
   user: null
 };
+
+const mapState = {
+  map: null,
+  tileLayer: null,
+  pathLayer: null,
+  marker: null,
+  geofenceLayer: null
+};
+
+const chartState = {
+  velocity: null,
+  acceleration: null
+};
+
+const otaLogs = {};
 
 const selectors = {
   loginView: document.getElementById('login-view'),
@@ -43,7 +60,27 @@ const selectors = {
   commandMetaInput: document.getElementById('command-meta-input'),
   commandMessage: document.getElementById('command-message'),
   directionPad: document.querySelector('.direction-pad'),
-  customCommandForm: document.getElementById('custom-command-form')
+  customCommandForm: document.getElementById('custom-command-form'),
+  tabButtons: document.querySelectorAll('.tab-button'),
+  tabPanels: document.querySelectorAll('[data-tab-panel]'),
+  teleopFeed: document.getElementById('teleop-feed'),
+  speedSlider: document.getElementById('speed-slider'),
+  modeButtons: document.querySelectorAll('.mode-buttons button'),
+  mapView: document.getElementById('map-view'),
+  pathLogList: document.getElementById('path-log-list'),
+  velocityChart: document.getElementById('velocity-chart'),
+  accelerationChart: document.getElementById('acceleration-chart'),
+  healthMotorTemp: document.getElementById('health-motor-temp'),
+  healthCpu: document.getElementById('health-cpu'),
+  healthBattery: document.getElementById('health-battery'),
+  diagnosticList: document.getElementById('diagnostic-list'),
+  alertList: document.getElementById('alert-list'),
+  otaCurrent: document.getElementById('ota-current'),
+  otaAvailable: document.getElementById('ota-available'),
+  otaLastUpdate: document.getElementById('ota-last-update'),
+  otaForm: document.getElementById('ota-form'),
+  otaVersionInput: document.getElementById('ota-version-input'),
+  otaLogList: document.getElementById('ota-log-list')
 };
 
 const toJSON = async (response) => {
@@ -115,8 +152,10 @@ const getSelectedRobot = () => state.robots.find((robot) => robot.id === state.s
 
 const selectRobot = (robotId) => {
   state.selectedRobotId = robotId;
+  state.activeTab = 'overview';
   renderFleetList();
   renderDetail();
+  loadInsightsForRobot(robotId);
 };
 
 const renderFleetList = () => {
@@ -202,6 +241,9 @@ const renderDetail = () => {
       selectors.detailCommandLog.appendChild(li);
     });
   }
+
+  updateTabUI();
+  renderInsights();
 };
 
 const updateTimestamp = () => {
@@ -222,6 +264,20 @@ const loadRobots = async () => {
     console.error('Failed to load robots', error); // eslint-disable-line no-console
   } finally {
     selectors.refreshButton.disabled = false;
+  }
+};
+
+const loadInsightsForRobot = async (robotId) => {
+  if (!auth.token || !robotId) {
+    return;
+  }
+  try {
+    const response = await apiFetch(`/api/robots/${robotId}/insights`);
+    const json = await toJSON(response);
+    state.insights[robotId] = json.data;
+    renderInsights();
+  } catch (error) {
+    console.error('Failed to load insights', error); // eslint-disable-line no-console
   }
 };
 
@@ -289,6 +345,8 @@ const sendCommand = async ({ robotId, type, value, metadata }) => {
   return toJSON(response);
 };
 
+const getSelectedSpeed = () => Number(selectors.speedSlider?.value ?? 0);
+
 const handleDirection = async (event) => {
   const { direction } = event.target.dataset;
   if (!direction) return;
@@ -301,7 +359,8 @@ const handleDirection = async (event) => {
     await sendCommand({
       robotId: robot.id,
       type: 'direction',
-      value: direction
+      value: direction,
+      metadata: { speed: getSelectedSpeed() }
     });
     setMessage(selectors.commandMessage, `Direction command "${direction}" queued.`, 'success');
     await loadRobots();
@@ -332,7 +391,7 @@ const sendCustomCommand = async (event) => {
       robotId: robot.id,
       type,
       value,
-      metadata
+      metadata: { ...metadata, speed: getSelectedSpeed() }
     });
     setMessage(selectors.commandMessage, 'Command dispatched to robot.', 'success');
     selectors.commandTypeInput.value = '';
@@ -341,6 +400,56 @@ const sendCustomCommand = async (event) => {
     await loadRobots();
   } catch (error) {
     setMessage(selectors.commandMessage, error.message, 'error');
+  }
+};
+
+const handleModeChange = async (event) => {
+  const { mode } = event.target.dataset;
+  if (!mode) return;
+  const robot = getSelectedRobot();
+  if (!robot) {
+    return setMessage(selectors.commandMessage, 'Select a robot first.', 'error');
+  }
+  try {
+    await apiFetch(`/api/robots/${robot.id}/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, speed: getSelectedSpeed() })
+    });
+    setMessage(selectors.commandMessage, `Mode "${mode}" acknowledged.`, 'success');
+    await loadRobots();
+  } catch (error) {
+    setMessage(selectors.commandMessage, error.message, 'error');
+  }
+};
+
+const handleOtaSubmit = async (event) => {
+  event.preventDefault();
+  const robot = getSelectedRobot();
+  if (!robot) {
+    return setMessage(selectors.statusMessage, 'Select a robot first.', 'error');
+  }
+  const targetVersion = selectors.otaVersionInput.value.trim();
+  try {
+    const response = await apiFetch(`/api/robots/${robot.id}/ota`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetVersion })
+    });
+    const json = await toJSON(response);
+    otaLogs[robot.id] = json.data.progressLog;
+    if (!state.insights[robot.id]) {
+      state.insights[robot.id] = {};
+    }
+    state.insights[robot.id].ota = {
+      ...state.insights[robot.id].ota,
+      currentVersion: json.data.targetVersion,
+      availableVersion: json.data.targetVersion
+    };
+    renderOtaPanel();
+    renderOtaLog(robot.id);
+  } catch (error) {
+    setMessage(selectors.statusMessage, error.message, 'error');
   }
 };
 
@@ -388,6 +497,11 @@ selectors.directionPad.addEventListener('click', handleDirection);
 selectors.customCommandForm.addEventListener('submit', sendCustomCommand);
 selectors.loginForm.addEventListener('submit', handleLoginSubmit);
 selectors.logoutButton.addEventListener('click', handleLogout);
+selectors.modeButtons.forEach((button) => button.addEventListener('click', handleModeChange));
+selectors.otaForm.addEventListener('submit', handleOtaSubmit);
+selectors.tabButtons.forEach((button) =>
+  button.addEventListener('click', () => setActiveTab(button.dataset.tab))
+);
 
 const bootstrap = async () => {
   if (!auth.token) {
@@ -401,3 +515,192 @@ const bootstrap = async () => {
 };
 
 bootstrap();
+
+const renderInsights = () => {
+  const robot = getSelectedRobot();
+  if (!robot) return;
+  const data = state.insights[robot.id];
+  if (!data) return;
+  selectors.detailMission.textContent = data.telemetry?.missionStatus || robot.mission || 'No mission assigned';
+  if (selectors.teleopFeed && data.telemetry?.cameraFeedUrl) {
+    selectors.teleopFeed.src = data.telemetry.cameraFeedUrl;
+  }
+  renderMapPanel(data);
+  renderCharts(data);
+  renderHealthPanel(data);
+  renderOtaPanel();
+  renderOtaLog(robot.id);
+};
+
+const updateTabUI = () => {
+  setActiveTab(state.activeTab);
+};
+
+const setActiveTab = (tab) => {
+  state.activeTab = tab;
+  selectors.tabButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.tab === tab);
+  });
+  selectors.tabPanels.forEach((panel) => {
+    panel.classList.toggle('hidden', panel.dataset.tabPanel !== tab);
+  });
+  if (tab === 'map' && mapState.map) {
+    setTimeout(() => mapState.map.invalidateSize(), 200);
+  }
+};
+
+const renderMapPanel = (insights) => {
+  if (!selectors.mapView || !window.L || !insights?.map) return;
+  const { lastKnownLocation, path, geofences } = insights.map;
+  if (!mapState.map) {
+    mapState.map = window.L.map('map-view');
+    mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(mapState.map);
+  }
+  mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
+  if (mapState.pathLayer) {
+    mapState.map.removeLayer(mapState.pathLayer);
+  }
+  mapState.pathLayer = window.L.polyline(
+    path.map((point) => [point.lat, point.lng]),
+    { color: '#4cc9f0' }
+  ).addTo(mapState.map);
+
+  if (mapState.marker) {
+    mapState.map.removeLayer(mapState.marker);
+  }
+  mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
+
+  if (mapState.geofenceLayer) {
+    mapState.map.removeLayer(mapState.geofenceLayer);
+  }
+  if (geofences?.length) {
+    const fence = geofences[0];
+    mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
+      radius: fence.radius,
+      color: '#f72585',
+      fillOpacity: 0.08
+    }).addTo(mapState.map);
+  }
+
+  selectors.pathLogList.innerHTML = path
+    .slice()
+    .reverse()
+    .map(
+      (point) =>
+        `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${point.lat.toFixed(
+          4
+        )}, ${point.lng.toFixed(4)}</li>`
+    )
+    .join('');
+
+  setTimeout(() => mapState.map.invalidateSize(), 250);
+};
+
+const renderCharts = (insights) => {
+  if (!window.Chart || !insights?.kinematics) return;
+  const { velocitySeries, accelerationSeries } = insights.kinematics;
+  if (selectors.velocityChart) {
+    if (!chartState.velocity) {
+      chartState.velocity = new window.Chart(selectors.velocityChart.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: velocitySeries.map((point) => `T${point.t}`),
+          datasets: [
+            {
+              label: 'Velocity (m/s)',
+              data: velocitySeries.map((point) => point.value),
+              borderColor: '#4cc9f0',
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    } else {
+      chartState.velocity.data.labels = velocitySeries.map((point) => `T${point.t}`);
+      chartState.velocity.data.datasets[0].data = velocitySeries.map((point) => point.value);
+      chartState.velocity.update();
+    }
+  }
+
+  if (selectors.accelerationChart) {
+    if (!chartState.acceleration) {
+      chartState.acceleration = new window.Chart(selectors.accelerationChart.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: accelerationSeries.map((point) => `T${point.t}`),
+          datasets: [
+            {
+              label: 'Acceleration (m/s²)',
+              data: accelerationSeries.map((point) => point.value),
+              borderColor: '#f72585',
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    } else {
+      chartState.acceleration.data.labels = accelerationSeries.map((point) => `T${point.t}`);
+      chartState.acceleration.data.datasets[0].data = accelerationSeries.map((point) => point.value);
+      chartState.acceleration.update();
+    }
+  }
+};
+
+const renderHealthPanel = (insights) => {
+  if (!insights?.health) return;
+  const { health } = insights;
+  selectors.healthMotorTemp.textContent = `${health.motorTemp} °C`;
+  selectors.healthCpu.textContent = `${health.cpuUsage} %`;
+  selectors.healthBattery.textContent = `${health.batteryCycles}`;
+  selectors.diagnosticList.innerHTML = health.diagnostics
+    .map((diag) => `<li><strong>${diag.name}</strong> · <span>${diag.status.toUpperCase()}</span></li>`)
+    .join('');
+  selectors.alertList.innerHTML = health.alerts?.length
+    ? health.alerts.map((alert) => `<li>${alert}</li>`).join('')
+    : '<li>No active alerts</li>';
+};
+
+const renderOtaPanel = () => {
+  const robot = getSelectedRobot();
+  if (!robot) return;
+  const data = state.insights[robot.id];
+  if (!data?.ota) return;
+  selectors.otaCurrent.textContent = data.ota.currentVersion;
+  selectors.otaAvailable.textContent = data.ota.availableVersion;
+  selectors.otaLastUpdate.textContent = data.ota.lastUpdated
+    ? new Date(data.ota.lastUpdated).toLocaleString()
+    : '—';
+};
+
+const renderOtaLog = (robotId) => {
+  const entries = otaLogs[robotId];
+  if (!entries || !entries.length) {
+    selectors.otaLogList.innerHTML = '<li>No updates triggered yet.</li>';
+    return;
+  }
+  selectors.otaLogList.innerHTML = entries
+    .map(
+      (entry) =>
+        `<li><strong>Step ${entry.step}:</strong> ${entry.message} <span class="muted small">${new Date(
+          entry.timestamp
+        ).toLocaleTimeString()}</span></li>`
+    )
+    .join('');
+};

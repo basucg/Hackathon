@@ -5,6 +5,7 @@ const {
   updateRobotStatus,
   recordRobotCommand
 } = require('../repositories/robotRepository');
+const { getRobotInsights, simulateFirmwareUpdate } = require('../services/insightService');
 
 const safeNumber = (value) => {
   const parsed = Number(value);
@@ -114,10 +115,49 @@ const sendCommandHandler = (req, res) => {
   return res.status(201).json({ data: result });
 };
 
+const getInsightsHandler = (req, res) => {
+  const robot = getRobotById(req.params.id);
+  if (!robot) {
+    return res.status(404).json({ error: 'Robot not found' });
+  }
+  const data = getRobotInsights(robot.id);
+  return res.json({ data });
+};
+
+const triggerOtaHandler = (req, res) => {
+  const robot = getRobotById(req.params.id);
+  if (!robot) {
+    return res.status(404).json({ error: 'Robot not found' });
+  }
+  const payload = simulateFirmwareUpdate(robot.id, req.body);
+  recordRobotCommand(robot.id, { type: 'ota', value: payload.targetVersion });
+  return res.json({ data: payload });
+};
+
+const sendModeHandler = (req, res) => {
+  const robot = getRobotById(req.params.id);
+  if (!robot) {
+    return res.status(404).json({ error: 'Robot not found' });
+  }
+  const { mode, speed } = req.body || {};
+  if (!mode) {
+    return res.status(400).json({ error: 'Mode is required' });
+  }
+  const result = recordRobotCommand(robot.id, {
+    type: 'mode',
+    value: mode,
+    metadata: { speed }
+  });
+  return res.status(201).json({ data: result });
+};
+
 module.exports = {
   listRobots,
   createRobotHandler,
   getRobotHandler,
   updateRobotStatusHandler,
-  sendCommandHandler
+  sendCommandHandler,
+  getInsightsHandler,
+  triggerOtaHandler,
+  sendModeHandler
 };
