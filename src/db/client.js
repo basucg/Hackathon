@@ -65,4 +65,21 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 `);
 
+const ensureColumn = (table, column, definition) => {
+  const exists = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .some((col) => col.name === column);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
+};
+
+ensureColumn('robots', "identifier TEXT");
+ensureColumn('robots', "status TEXT DEFAULT 'offline'");
+ensureColumn('robots', "subStatus TEXT");
+ensureColumn('robots', 'latitude REAL');
+ensureColumn('robots', 'longitude REAL');
+ensureColumn('robots', 'lastKnownAt TEXT');
+
 module.exports = db;
