@@ -80,7 +80,8 @@ const selectors = {
   otaLastUpdate: document.getElementById('ota-last-update'),
   otaForm: document.getElementById('ota-form'),
   otaVersionInput: document.getElementById('ota-version-input'),
-  otaLogList: document.getElementById('ota-log-list')
+  otaLogList: document.getElementById('ota-log-list'),
+  themeToggle: document.getElementById('theme-toggle-input')
 };
 
 const toJSON = async (response) => {
@@ -169,6 +170,11 @@ const renderFleetList = () => {
     meta.className = 'fleet-meta';
     meta.innerHTML = `<strong>${robot.name}</strong><span>${robot.model}</span>`;
 
+    const status = document.createElement('div');
+    const isOnline = (robot.signalStrength ?? 0) > 40 && (robot.batteryLevel ?? 0) > 15;
+    status.className = `fleet-status ${isOnline ? 'status-online' : 'status-offline'}`;
+    status.innerHTML = `<span class="status-dot"></span>${isOnline ? 'Online' : 'Offline'}`;
+
     const readings = document.createElement('div');
     readings.className = 'fleet-readings';
     readings.innerHTML = `
@@ -176,7 +182,7 @@ const renderFleetList = () => {
       <span>Signal: ${formatPercent(robot.signalStrength)}</span>
     `;
 
-    item.append(meta, readings);
+    item.append(meta, readings, status);
     item.addEventListener('click', () => selectRobot(robot.id));
     selectors.fleetList.appendChild(item);
 
@@ -502,6 +508,13 @@ selectors.otaForm.addEventListener('submit', handleOtaSubmit);
 selectors.tabButtons.forEach((button) =>
   button.addEventListener('click', () => setActiveTab(button.dataset.tab))
 );
+selectors.themeToggle.addEventListener('change', (event) => {
+  if (event.target.checked) {
+    document.body.setAttribute('data-theme', 'dark');
+  } else {
+    document.body.removeAttribute('data-theme');
+  }
+});
 
 const bootstrap = async () => {
   if (!auth.token) {

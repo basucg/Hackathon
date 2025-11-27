@@ -65,7 +65,13 @@
         <section class="panel fleet-panel">
           <div class="panel-title">
             <h2>Fleet overview</h2>
-            <span class="badge" id="fleet-count">0 robots online</span>
+            <div class="fleet-header-controls">
+              <span class="badge" id="fleet-count">0 robots online</span>
+              <label class="theme-toggle">
+                <input type="checkbox" id="theme-toggle-input" />
+                <span>Robot theme</span>
+              </label>
+            </div>
           </div>
           <ul id="fleet-list" class="fleet-list"></ul>
         </section>
