@@ -16,7 +16,7 @@ LIMIT 1
 const selectHistoryStmt = db.prepare(`
 SELECT version, appliedAt
 FROM robot_firmware_history
-WHERE robotId = ?
+WHERE robotId = @robotId
 ORDER BY appliedAt DESC, id DESC
 LIMIT @limit
 `);
@@ -48,10 +48,12 @@ const getCurrentVersion = (robotId) => {
 };
 
 const getHistory = (robotId, limit = 10) => {
-  return selectHistoryStmt.all({ robotId, limit }).map((row) => ({
-    version: row.version,
-    appliedAt: row.appliedAt
-  }));
+  return selectHistoryStmt
+    .all({ robotId, limit })
+    .map((row) => ({
+      version: row.version,
+      appliedAt: row.appliedAt
+    }));
 };
 
 module.exports = {
