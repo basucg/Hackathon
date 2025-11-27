@@ -85,10 +85,6 @@ const selectors = {
   otaStepsList: document.getElementById('ota-steps-list'),
   otaHistoryList: document.getElementById('ota-history-list'),
   otaFailureToggle: document.getElementById('ota-failure-toggle'),
-  fleetOtaForm: document.getElementById('fleet-ota-form'),
-  fleetOtaVersion: document.getElementById('fleet-ota-version'),
-  fleetOtaFailureSelect: document.getElementById('fleet-ota-failure-select'),
-  fleetOtaResults: document.getElementById('fleet-ota-results'),
   themeToggle: document.getElementById('theme-toggle-input')
 };
 
@@ -204,7 +200,6 @@ const renderFleetList = () => {
   }
 
   selectors.fleetCount.textContent = `${state.robots.length} robots online`;
-  populateFleetFailureSelect();
 };
 
 const renderDetail = () => {
@@ -262,25 +257,6 @@ const renderDetail = () => {
 
   updateTabUI();
   renderInsights();
-};
-
-const populateFleetFailureSelect = () => {
-  if (!selectors.fleetOtaFailureSelect) return;
-  if (!state.robots.length) {
-    selectors.fleetOtaFailureSelect.innerHTML = '';
-    return;
-  }
-  const selected = new Set(
-    Array.from(selectors.fleetOtaFailureSelect.selectedOptions || []).map((option) => option.value)
-  );
-  selectors.fleetOtaFailureSelect.innerHTML = state.robots
-    .map(
-      (robot) =>
-        `<option value="${robot.id}"${selected.has(robot.id) ? ' selected' : ''}>
-          ${robot.name} (${robot.model})
-        </option>`
-    )
-    .join('');
 };
 
 const updateTimestamp = () => {
@@ -497,49 +473,6 @@ const handleOtaSubmit = async (event) => {
   }
 };
 
-const handleFleetOtaSubmit = async (event) => {
-  event.preventDefault();
-  const targetVersion = selectors.fleetOtaVersion.value.trim();
-  const failures = Array.from(selectors.fleetOtaFailureSelect.selectedOptions || []).map((option) => option.value);
-  try {
-    const response = await apiFetch('/api/robots/fleet/ota', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetVersion, failures })
-    });
-    const json = await toJSON(response);
-    if (!json.data.results.length) {
-      selectors.fleetOtaResults.innerHTML = '<li>No robots available for OTA.</li>';
-    } else {
-      selectors.fleetOtaResults.innerHTML = json.data.results
-        .map(
-          (result) =>
-            `<li><strong>${result.name}</strong> · ${result.status.toUpperCase()} (${result.targetVersion})</li>`
-        )
-        .join('');
-    }
-    json.data.results.forEach((result) => {
-      if (!state.insights[result.robotId]) {
-        state.insights[result.robotId] = {};
-      }
-      state.insights[result.robotId].ota = {
-        ...(state.insights[result.robotId].ota || {}),
-        currentVersion: result.currentVersion,
-        availableVersion: result.targetVersion,
-        status: result.status
-      };
-      state.insights[result.robotId].firmwareHistory = result.history;
-      otaLogs[result.robotId] = result.progressLog;
-    });
-    await loadRobots();
-    if (state.selectedRobotId) {
-      await loadInsightsForRobot(state.selectedRobotId);
-    }
-  } catch (error) {
-    selectors.fleetOtaResults.innerHTML = `<li class="error">${error.message}</li>`;
-  }
-};
-
 const handleLoginSubmit = async (event) => {
   event.preventDefault();
   const username = selectors.loginUsername.value.trim();
@@ -596,7 +529,6 @@ selectors.themeToggle.addEventListener('change', (event) => {
     document.body.removeAttribute('data-theme');
   }
 });
-selectors.fleetOtaForm?.addEventListener('submit', handleFleetOtaSubmit);
 
 const bootstrap = async () => {
   if (!auth.token) {

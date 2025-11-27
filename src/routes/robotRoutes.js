@@ -7,7 +7,6 @@ const {
   sendCommandHandler,
   getInsightsHandler,
   triggerOtaHandler,
-  triggerFleetOtaHandler,
   sendModeHandler
 } = require('../controllers/robotController');
 
@@ -15,7 +14,6 @@ const router = express.Router();
 
 router.get('/', listRobots);
 router.post('/', createRobotHandler);
-router.post('/fleet/ota', triggerFleetOtaHandler);
 router.get('/:id', getRobotHandler);
 router.put('/:id/status', updateRobotStatusHandler);
 router.post('/:id/commands', sendCommandHandler);

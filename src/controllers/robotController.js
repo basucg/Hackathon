@@ -157,39 +157,6 @@ const triggerOtaHandler = (req, res) => {
   });
 };
 
-const triggerFleetOtaHandler = (req, res) => {
-  const { targetVersion, failures = [] } = req.body || {};
-  const failureSet = new Set(failures);
-  const robots = getRobots();
-  const results = robots.map((robot) => {
-    ensureInitialVersion(robot.id);
-    const simulateFailure = failureSet.has(robot.id);
-    const payload = simulateFirmwareUpdate(robot.id, {
-      targetVersion,
-      simulateFailure
-    });
-    if (payload.status !== 'failed') {
-      recordVersion(robot.id, payload.targetVersion);
-    }
-    recordRobotCommand(robot.id, {
-      type: payload.status === 'failed' ? 'ota_failed' : 'ota',
-      value: payload.targetVersion
-    });
-    const history = getHistory(robot.id, 20);
-    const current = getCurrentVersion(robot.id);
-    return {
-      robotId: robot.id,
-      name: robot.name,
-      status: payload.status,
-      targetVersion: payload.targetVersion,
-      currentVersion: current.version,
-      progressLog: payload.progressLog,
-      history
-    };
-  });
-  return res.json({ data: { results } });
-};
-
 const sendModeHandler = (req, res) => {
   const robot = getRobotById(req.params.id);
   if (!robot) {
@@ -215,6 +182,5 @@ module.exports = {
   sendCommandHandler,
   getInsightsHandler,
   triggerOtaHandler,
-  triggerFleetOtaHandler,
   sendModeHandler
 };

@@ -526,24 +526,6 @@ p {
   font-size: 0.85rem;
 }
 
-.fleet-ota {
-  margin-top: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1rem;
-}
-
-.fleet-ota ul {
-  list-style: none;
-  padding: 0;
-  margin: 0.75rem 0 0;
-  font-size: 0.9rem;
-}
-
-.fleet-ota ul .error {
-  color: var(--accent-2);
-}
-
 .ota-history {
   margin-top: 1rem;
   border: 1px solid var(--border);
@@ -612,10 +594,6 @@ textarea {
   background: rgba(255, 255, 255, 0.02);
   color: var(--text);
   font-family: inherit;
-}
-
-select[multiple] {
-  min-height: 120px;
 }
 
 textarea {
