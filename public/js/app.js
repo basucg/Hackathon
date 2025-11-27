@@ -3,7 +3,19 @@ const state = {
   selectedRobotId: null
 };
 
+const auth = {
+  token: localStorage.getItem('rebotToken') || null,
+  user: null
+};
+
 const selectors = {
+  loginView: document.getElementById('login-view'),
+  appView: document.getElementById('app-view'),
+  loginForm: document.getElementById('login-form'),
+  loginUsername: document.getElementById('login-username'),
+  loginPassword: document.getElementById('login-password'),
+  loginMessage: document.getElementById('login-message'),
+  logoutButton: document.getElementById('logout-btn'),
   fleetList: document.getElementById('fleet-list'),
   fleetCount: document.getElementById('fleet-count'),
   refreshButton: document.getElementById('refresh-btn'),
@@ -43,8 +55,50 @@ const toJSON = async (response) => {
   return response.json();
 };
 
+const setToken = (token) => {
+  auth.token = token;
+  if (token) {
+    localStorage.setItem('rebotToken', token);
+  } else {
+    localStorage.removeItem('rebotToken');
+  }
+};
+
+const showLogin = (message) => {
+  selectors.loginView.classList.remove('hidden');
+  selectors.appView.classList.add('hidden');
+  if (message) {
+    setMessage(selectors.loginMessage, message, 'error');
+  } else {
+    setMessage(selectors.loginMessage, '', '');
+  }
+};
+
+const showApp = () => {
+  selectors.loginView.classList.add('hidden');
+  selectors.appView.classList.remove('hidden');
+};
+
+const forceLogout = (message) => {
+  setToken(null);
+  auth.user = null;
+  showLogin(message);
+};
+
+const apiFetch = async (url, options = {}) => {
+  const headers = { ...(options.headers || {}) };
+  if (auth.token) {
+    headers.Authorization = `Bearer ${auth.token}`;
+  }
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    forceLogout('Session expired. Please sign in again.');
+  }
+  return response;
+};
+
 const fetchRobots = async () => {
-  const response = await fetch('/api/robots');
+  const response = await apiFetch('/api/robots');
   const json = await toJSON(response);
   return json.data ?? [];
 };
@@ -155,6 +209,9 @@ const updateTimestamp = () => {
 };
 
 const loadRobots = async () => {
+  if (!auth.token) {
+    return;
+  }
   selectors.refreshButton.disabled = true;
   try {
     state.robots = await fetchRobots();
@@ -162,7 +219,7 @@ const loadRobots = async () => {
     renderDetail();
     updateTimestamp();
   } catch (error) {
-    alert(`Failed to load robots: ${error.message}`);
+    console.error('Failed to load robots', error); // eslint-disable-line no-console
   } finally {
     selectors.refreshButton.disabled = false;
   }
@@ -200,7 +257,7 @@ const sendStatusUpdate = async (event) => {
     return setMessage(selectors.statusMessage, 'Add at least one field to update.', 'error');
   }
   try {
-    const response = await fetch(`/api/robots/${robot.id}/status`, {
+    const response = await apiFetch(`/api/robots/${robot.id}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -224,7 +281,7 @@ const parseMetadata = (value) => {
 };
 
 const sendCommand = async ({ robotId, type, value, metadata }) => {
-  const response = await fetch(`/api/robots/${robotId}/commands`, {
+  const response = await apiFetch(`/api/robots/${robotId}/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, value, metadata })
@@ -287,9 +344,60 @@ const sendCustomCommand = async (event) => {
   }
 };
 
+const handleLoginSubmit = async (event) => {
+  event.preventDefault();
+  const username = selectors.loginUsername.value.trim();
+  const password = selectors.loginPassword.value.trim();
+  if (!username || !password) {
+    return setMessage(selectors.loginMessage, 'Enter username and password.', 'error');
+  }
+
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const json = await toJSON(response);
+    setToken(json.token);
+    auth.user = json.user;
+    selectors.loginForm.reset();
+    showApp();
+    setMessage(selectors.loginMessage, '', '');
+    await loadRobots();
+  } catch (error) {
+    setMessage(selectors.loginMessage, error.message, 'error');
+  }
+};
+
+const handleLogout = async () => {
+  try {
+    if (auth.token) {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    }
+  } catch (error) {
+    console.warn('Logout failed', error); // eslint-disable-line no-console
+  } finally {
+    forceLogout();
+  }
+};
+
 selectors.refreshButton.addEventListener('click', loadRobots);
 selectors.statusForm.addEventListener('submit', sendStatusUpdate);
 selectors.directionPad.addEventListener('click', handleDirection);
 selectors.customCommandForm.addEventListener('submit', sendCustomCommand);
+selectors.loginForm.addEventListener('submit', handleLoginSubmit);
+selectors.logoutButton.addEventListener('click', handleLogout);
 
-loadRobots();
+const bootstrap = async () => {
+  if (!auth.token) {
+    showLogin();
+    return;
+  }
+  await loadRobots();
+  if (auth.token) {
+    showApp();
+  }
+};
+
+bootstrap();

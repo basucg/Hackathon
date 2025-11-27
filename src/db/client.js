@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS robot_commands (
 );
 
 CREATE INDEX IF NOT EXISTS idx_robot_commands_robotId ON robot_commands(robotId);
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  passwordHash TEXT NOT NULL,
+  role TEXT DEFAULT 'operator'
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+);
 `);
 
 module.exports = db;

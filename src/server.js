@@ -2,6 +2,8 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const robotRoutes = require('./routes/robotRoutes');
+const authRoutes = require('./routes/authRoutes');
+const { requireAuth } = require('./middleware/requireAuth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,7 +16,8 @@ app.get('/health', (_, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/robots', robotRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/robots', requireAuth, robotRoutes);
 app.use('/api/*', (_, res) => {
   res.status(404).json({ error: 'API route not found' });
 });

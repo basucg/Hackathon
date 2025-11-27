@@ -27,6 +27,18 @@ body {
   padding: 2rem clamp(1rem, 4vw, 4rem);
 }
 
+.auth-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-panel {
+  max-width: 420px;
+  width: min(420px, 100%);
+}
+
 h1,
 h2,
 h3,
