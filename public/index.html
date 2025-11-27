@@ -267,11 +267,15 @@
                 <form id="ota-form" class="stack">
                   <label>
                     Target version
-                    <input id="ota-version-input" placeholder="v1.4.0" />
+                    <input id="ota-version-input" placeholder="V2.0" />
                   </label>
                   <label class="file-input">
                     Firmware file
                     <input id="ota-file-input" type="file" />
+                  </label>
+                  <label class="checkbox-inline">
+                    <input type="checkbox" id="ota-failure-toggle" />
+                    Simulate failure
                   </label>
                   <button class="primary" type="submit">Push OTA update</button>
                 </form>
@@ -292,6 +296,21 @@
               <div class="ota-history">
                 <h4>Firmware history</h4>
                 <ul id="ota-history-list"></ul>
+              </div>
+              <div class="fleet-ota">
+                <h4>Fleet OTA demo</h4>
+                <form id="fleet-ota-form" class="stack">
+                  <label>
+                    Target version
+                    <input id="fleet-ota-version" placeholder="V3.0" />
+                  </label>
+                  <label>
+                    Mark failures
+                    <select id="fleet-ota-failure-select" multiple></select>
+                  </label>
+                  <button class="secondary" type="submit">Simulate fleet OTA</button>
+                </form>
+                <ul id="fleet-ota-results"></ul>
               </div>
             </section>
           </div>

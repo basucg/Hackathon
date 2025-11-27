@@ -39,6 +39,7 @@ const defaultRobots = [
 ];
 
 const robotRowToEntity = (row) => {
+  firmwareRepo.ensureInitialVersion(row.id);
   const firmware = firmwareRepo.getCurrentVersion(row.id);
   return {
     id: row.id,

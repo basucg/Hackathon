@@ -487,10 +487,26 @@ p {
   transition: width 0.4s ease;
 }
 
+.progress-fill.failure {
+  background: linear-gradient(90deg, #f43f5e, #f97316);
+}
+
 .file-input input {
   padding: 0.4rem;
   border-radius: 10px;
   border: 1px dashed var(--border);
+}
+
+.checkbox-inline {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.checkbox-inline input {
+  accent-color: var(--accent);
 }
 
 .ota-log {
@@ -508,6 +524,24 @@ p {
   padding: 0;
   margin: 0;
   font-size: 0.85rem;
+}
+
+.fleet-ota {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+.fleet-ota ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+}
+
+.fleet-ota ul .error {
+  color: var(--accent-2);
 }
 
 .ota-history {
@@ -578,6 +612,10 @@ textarea {
   background: rgba(255, 255, 255, 0.02);
   color: var(--text);
   font-family: inherit;
+}
+
+select[multiple] {
+  min-height: 120px;
 }
 
 textarea {

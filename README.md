@@ -37,6 +37,7 @@ The server listens on `http://localhost:3000` by default. The UI is served from 
 | GET    | `/api/robots/:id/insights` | Retrieve map/kinematics/health mock data |
 | POST   | `/api/robots/:id/mode`     | Change drive mode + target speed       |
 | POST   | `/api/robots/:id/ota`      | Simulate an over-the-air firmware push |
+| POST   | `/api/robots/fleet/ota`    | Run an OTA simulation across the fleet |
 
 ### Sample: update telemetry
 ```bash
@@ -76,5 +77,5 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
    - **Teleop** – drive with the pad, tweak speed, change modes, watch the simulated feed.
    - **Map & Path** – explore location trails, geofence overlays, velocity/acc charts.
    - **Health** – monitor motor temp, CPU load, battery cycles, faults.
-   - **OTA Update** – enter a version + file, watch the progress bar + step log, and review firmware history.
+   - **OTA Update** – enter a version + file, optionally simulate failures, watch the progress bar + step log, review firmware history, or run a fleet-wide OTA demo with targeted failures.
 5. Use the command log + health alerts to narrate your demo (“collision detected”, “mode switched to autonomous”, etc.).

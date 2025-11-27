@@ -91,24 +91,27 @@ const getRobotInsights = (robotId) => {
 };
 
 const simulateFirmwareUpdate = (robotId, payload = {}) => {
-  const target = payload.targetVersion ? String(payload.targetVersion).toUpperCase() : null;
-  const version = target || 'V1';
+  const targetInput = payload.targetVersion ? String(payload.targetVersion).trim().toUpperCase() : null;
+  const version = targetInput ? (targetInput.startsWith('V') ? targetInput : `V${targetInput}`) : 'V1';
+  const shouldFail = Boolean(payload.simulateFailure);
   const steps = [
     'Queued update package',
     'Transferring binaries',
     'Verifying checksum',
     'Applying firmware',
     'Rebooting subsystems',
-    'Update complete'
+    shouldFail ? 'Update failed - rollback triggered' : 'Update complete'
   ];
+  const progressLog = steps.map((message, idx) => ({
+    step: idx + 1,
+    message,
+    timestamp: new Date(Date.now() + idx * 5000).toISOString(),
+    progress: Math.round((idx / (steps.length - 1)) * 100)
+  }));
   return {
     targetVersion: version,
-    progressLog: steps.map((message, idx) => ({
-      step: idx + 1,
-      message,
-      timestamp: new Date(Date.now() + idx * 5000).toISOString(),
-      progress: Math.round((idx / (steps.length - 1)) * 100)
-    }))
+    status: shouldFail ? 'failed' : 'success',
+    progressLog
   };
 };
 

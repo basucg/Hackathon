@@ -84,6 +84,11 @@ const selectors = {
   otaProgressFill: document.getElementById('ota-progress-fill'),
   otaStepsList: document.getElementById('ota-steps-list'),
   otaHistoryList: document.getElementById('ota-history-list'),
+  otaFailureToggle: document.getElementById('ota-failure-toggle'),
+  fleetOtaForm: document.getElementById('fleet-ota-form'),
+  fleetOtaVersion: document.getElementById('fleet-ota-version'),
+  fleetOtaFailureSelect: document.getElementById('fleet-ota-failure-select'),
+  fleetOtaResults: document.getElementById('fleet-ota-results'),
   themeToggle: document.getElementById('theme-toggle-input')
 };
 
@@ -199,6 +204,7 @@ const renderFleetList = () => {
   }
 
   selectors.fleetCount.textContent = `${state.robots.length} robots online`;
+  populateFleetFailureSelect();
 };
 
 const renderDetail = () => {
@@ -256,6 +262,25 @@ const renderDetail = () => {
 
   updateTabUI();
   renderInsights();
+};
+
+const populateFleetFailureSelect = () => {
+  if (!selectors.fleetOtaFailureSelect) return;
+  if (!state.robots.length) {
+    selectors.fleetOtaFailureSelect.innerHTML = '';
+    return;
+  }
+  const selected = new Set(
+    Array.from(selectors.fleetOtaFailureSelect.selectedOptions || []).map((option) => option.value)
+  );
+  selectors.fleetOtaFailureSelect.innerHTML = state.robots
+    .map(
+      (robot) =>
+        `<option value="${robot.id}"${selected.has(robot.id) ? ' selected' : ''}>
+          ${robot.name} (${robot.model})
+        </option>`
+    )
+    .join('');
 };
 
 const updateTimestamp = () => {
@@ -442,11 +467,12 @@ const handleOtaSubmit = async (event) => {
     return setMessage(selectors.statusMessage, 'Select a robot first.', 'error');
   }
   const targetVersion = selectors.otaVersionInput.value.trim();
+  const simulateFailure = selectors.otaFailureToggle?.checked;
   try {
     const response = await apiFetch(`/api/robots/${robot.id}/ota`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetVersion })
+      body: JSON.stringify({ targetVersion, simulateFailure })
     });
     const json = await toJSON(response);
     otaLogs[robot.id] = json.data.progressLog;
@@ -456,14 +482,61 @@ const handleOtaSubmit = async (event) => {
     state.insights[robot.id].ota = {
       ...state.insights[robot.id].ota,
       currentVersion: json.data.targetVersion,
-      availableVersion: json.data.targetVersion
+      availableVersion: json.data.targetVersion,
+      status: json.data.status
     };
     state.insights[robot.id].firmwareHistory = json.data.history || [];
     renderOtaPanel();
     renderOtaLog(robot.id);
     renderOtaHistory(robot.id);
+    if (selectors.otaFailureToggle) {
+      selectors.otaFailureToggle.checked = false;
+    }
   } catch (error) {
     setMessage(selectors.statusMessage, error.message, 'error');
+  }
+};
+
+const handleFleetOtaSubmit = async (event) => {
+  event.preventDefault();
+  const targetVersion = selectors.fleetOtaVersion.value.trim();
+  const failures = Array.from(selectors.fleetOtaFailureSelect.selectedOptions || []).map((option) => option.value);
+  try {
+    const response = await apiFetch('/api/robots/fleet/ota', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetVersion, failures })
+    });
+    const json = await toJSON(response);
+    if (!json.data.results.length) {
+      selectors.fleetOtaResults.innerHTML = '<li>No robots available for OTA.</li>';
+    } else {
+      selectors.fleetOtaResults.innerHTML = json.data.results
+        .map(
+          (result) =>
+            `<li><strong>${result.name}</strong> · ${result.status.toUpperCase()} (${result.targetVersion})</li>`
+        )
+        .join('');
+    }
+    json.data.results.forEach((result) => {
+      if (!state.insights[result.robotId]) {
+        state.insights[result.robotId] = {};
+      }
+      state.insights[result.robotId].ota = {
+        ...(state.insights[result.robotId].ota || {}),
+        currentVersion: result.currentVersion,
+        availableVersion: result.targetVersion,
+        status: result.status
+      };
+      state.insights[result.robotId].firmwareHistory = result.history;
+      otaLogs[result.robotId] = result.progressLog;
+    });
+    await loadRobots();
+    if (state.selectedRobotId) {
+      await loadInsightsForRobot(state.selectedRobotId);
+    }
+  } catch (error) {
+    selectors.fleetOtaResults.innerHTML = `<li class="error">${error.message}</li>`;
   }
 };
 
@@ -523,6 +596,7 @@ selectors.themeToggle.addEventListener('change', (event) => {
     document.body.removeAttribute('data-theme');
   }
 });
+selectors.fleetOtaForm?.addEventListener('submit', handleFleetOtaSubmit);
 
 const bootstrap = async () => {
   if (!auth.token) {
@@ -544,7 +618,6 @@ const renderInsights = () => {
   if (!data) return;
   selectors.detailMission.textContent = data.telemetry?.missionStatus || robot.mission || 'No mission assigned';
   robot.insightsLocation = data.map?.lastKnownLocation;
-  state.insights[robot.id].firmwareHistory = data.firmwareHistory || [];
   if (selectors.teleopFeed && data.telemetry?.cameraFeedUrl) {
     selectors.teleopFeed.src = data.telemetry.cameraFeedUrl;
   }
@@ -714,11 +787,13 @@ const renderOtaPanel = () => {
 };
 
 const renderOtaLog = (robotId) => {
+  if (!selectors.otaProgressFill) return;
   const entries = otaLogs[robotId];
   if (!entries || !entries.length) {
     selectors.otaLogList.innerHTML = '<li>No updates triggered yet.</li>';
     selectors.otaStepsList.innerHTML = '';
     selectors.otaProgressFill.style.width = '0%';
+    selectors.otaProgressFill.classList.remove('failure');
     return;
   }
   selectors.otaLogList.innerHTML = entries
@@ -734,9 +809,12 @@ const renderOtaLog = (robotId) => {
     .join('');
   const latest = entries[entries.length - 1];
   selectors.otaProgressFill.style.width = `${latest.progress}%`;
+  const status = state.insights[robotId]?.ota?.status || 'success';
+  selectors.otaProgressFill.classList.toggle('failure', status === 'failed');
 };
 
 const renderOtaHistory = (robotId) => {
+  if (!selectors.otaHistoryList) return;
   const data = state.insights[robotId];
   if (!data) return;
   const history = data.firmwareHistory || [];

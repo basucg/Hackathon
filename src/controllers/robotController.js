@@ -131,6 +131,7 @@ const getInsightsHandler = (req, res) => {
   ensureInitialVersion(robot.id);
   data.ota.currentVersion = current.version;
   data.ota.availableVersion = data.ota.availableVersion || 'V1';
+  data.ota.status = data.ota.status || 'success';
   data.firmwareHistory = getHistory(robot.id, 10);
   return res.json({ data });
 };
@@ -141,14 +142,52 @@ const triggerOtaHandler = (req, res) => {
     return res.status(404).json({ error: 'Robot not found' });
   }
   const payload = simulateFirmwareUpdate(robot.id, req.body);
-  recordVersion(robot.id, payload.targetVersion);
-  recordRobotCommand(robot.id, { type: 'ota', value: payload.targetVersion });
+  if (payload.status !== 'failed') {
+    recordVersion(robot.id, payload.targetVersion);
+  }
+  recordRobotCommand(robot.id, {
+    type: payload.status === 'failed' ? 'ota_failed' : 'ota',
+    value: payload.targetVersion
+  });
   return res.json({
     data: {
       ...payload,
       history: getHistory(robot.id, 20)
     }
   });
+};
+
+const triggerFleetOtaHandler = (req, res) => {
+  const { targetVersion, failures = [] } = req.body || {};
+  const failureSet = new Set(failures);
+  const robots = getRobots();
+  const results = robots.map((robot) => {
+    ensureInitialVersion(robot.id);
+    const simulateFailure = failureSet.has(robot.id);
+    const payload = simulateFirmwareUpdate(robot.id, {
+      targetVersion,
+      simulateFailure
+    });
+    if (payload.status !== 'failed') {
+      recordVersion(robot.id, payload.targetVersion);
+    }
+    recordRobotCommand(robot.id, {
+      type: payload.status === 'failed' ? 'ota_failed' : 'ota',
+      value: payload.targetVersion
+    });
+    const history = getHistory(robot.id, 20);
+    const current = getCurrentVersion(robot.id);
+    return {
+      robotId: robot.id,
+      name: robot.name,
+      status: payload.status,
+      targetVersion: payload.targetVersion,
+      currentVersion: current.version,
+      progressLog: payload.progressLog,
+      history
+    };
+  });
+  return res.json({ data: { results } });
 };
 
 const sendModeHandler = (req, res) => {
@@ -176,5 +215,6 @@ module.exports = {
   sendCommandHandler,
   getInsightsHandler,
   triggerOtaHandler,
+  triggerFleetOtaHandler,
   sendModeHandler
 };
