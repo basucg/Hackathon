@@ -81,6 +81,9 @@ const selectors = {
   otaForm: document.getElementById('ota-form'),
   otaVersionInput: document.getElementById('ota-version-input'),
   otaLogList: document.getElementById('ota-log-list'),
+  otaProgressFill: document.getElementById('ota-progress-fill'),
+  otaStepsList: document.getElementById('ota-steps-list'),
+  otaHistoryList: document.getElementById('ota-history-list'),
   themeToggle: document.getElementById('theme-toggle-input')
 };
 
@@ -455,8 +458,10 @@ const handleOtaSubmit = async (event) => {
       currentVersion: json.data.targetVersion,
       availableVersion: json.data.targetVersion
     };
+    state.insights[robot.id].firmwareHistory = json.data.history || [];
     renderOtaPanel();
     renderOtaLog(robot.id);
+    renderOtaHistory(robot.id);
   } catch (error) {
     setMessage(selectors.statusMessage, error.message, 'error');
   }
@@ -539,6 +544,7 @@ const renderInsights = () => {
   if (!data) return;
   selectors.detailMission.textContent = data.telemetry?.missionStatus || robot.mission || 'No mission assigned';
   robot.insightsLocation = data.map?.lastKnownLocation;
+  state.insights[robot.id].firmwareHistory = data.firmwareHistory || [];
   if (selectors.teleopFeed && data.telemetry?.cameraFeedUrl) {
     selectors.teleopFeed.src = data.telemetry.cameraFeedUrl;
   }
@@ -704,12 +710,15 @@ const renderOtaPanel = () => {
   selectors.otaLastUpdate.textContent = data.ota.lastUpdated
     ? new Date(data.ota.lastUpdated).toLocaleString()
     : '—';
+  renderOtaHistory(robot.id);
 };
 
 const renderOtaLog = (robotId) => {
   const entries = otaLogs[robotId];
   if (!entries || !entries.length) {
     selectors.otaLogList.innerHTML = '<li>No updates triggered yet.</li>';
+    selectors.otaStepsList.innerHTML = '';
+    selectors.otaProgressFill.style.width = '0%';
     return;
   }
   selectors.otaLogList.innerHTML = entries
@@ -718,6 +727,29 @@ const renderOtaLog = (robotId) => {
         `<li><strong>Step ${entry.step}:</strong> ${entry.message} <span class="muted small">${new Date(
           entry.timestamp
         ).toLocaleTimeString()}</span></li>`
+    )
+    .join('');
+  selectors.otaStepsList.innerHTML = entries
+    .map((entry) => `<li><strong>${entry.progress}%</strong> · ${entry.message}</li>`)
+    .join('');
+  const latest = entries[entries.length - 1];
+  selectors.otaProgressFill.style.width = `${latest.progress}%`;
+};
+
+const renderOtaHistory = (robotId) => {
+  const data = state.insights[robotId];
+  if (!data) return;
+  const history = data.firmwareHistory || [];
+  if (!history.length) {
+    selectors.otaHistoryList.innerHTML = '<li>No firmware updates yet.</li>';
+    return;
+  }
+  selectors.otaHistoryList.innerHTML = history
+    .map(
+      (entry) =>
+        `<li><strong>${entry.version}</strong> · ${
+          entry.appliedAt ? new Date(entry.appliedAt).toLocaleString() : '—'
+        }</li>`
     )
     .join('');
 };

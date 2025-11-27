@@ -5,6 +5,7 @@ Operational dashboard and JSON API for tracking robot telemetry, sending manual 
 ## Features
 - REST API to read the fleet, patch robot telemetry, stream insights, and queue commands (direction, mode, OTA, etc.)
 - SQLite-backed robot registry with seeded demo bots (Atlas, Scout, Lifter) persisted to `data/robots.db`
+- Firmware history tracking for every robot (10k+ ready) with OTA progress logs and version rollups
 - Secure login gate with session tokens so only approved operators can access controls
 - Live cloud console tabs:
   - **Overview** – status uplink, command log, telemetry stats
@@ -59,7 +60,7 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
 ## Data storage
 - Robot metadata and command history live in a SQLite file at `data/robots.db` (automatically created).
 - Seed robots are inserted the first time the DB is empty; delete the file to reset the environment.
-- Use any SQLite browser to inspect the tables (`robots`, `robot_commands`) if you need direct access.
+- Use any SQLite browser to inspect the tables (`robots`, `robot_commands`, `robot_firmware_history`) if you need direct access.
 
 ## Authentication
 - Default credentials: `robot-admin` / `robotops` (change by updating the seed logic in `src/repositories/authRepository.js`).
@@ -75,5 +76,5 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
    - **Teleop** – drive with the pad, tweak speed, change modes, watch the simulated feed.
    - **Map & Path** – explore location trails, geofence overlays, velocity/acc charts.
    - **Health** – monitor motor temp, CPU load, battery cycles, faults.
-   - **OTA Update** – enter a version + file, watch the progress log as the mock upgrade runs.
+   - **OTA Update** – enter a version + file, watch the progress bar + step log, and review firmware history.
 5. Use the command log + health alerts to narrate your demo (“collision detected”, “mode switched to autonomous”, etc.).

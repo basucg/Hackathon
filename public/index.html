@@ -276,9 +276,22 @@
                   <button class="primary" type="submit">Push OTA update</button>
                 </form>
               </div>
-              <div class="ota-log">
-                <h4>Update progress</h4>
-                <ul id="ota-log-list"></ul>
+              <div class="ota-progress-section">
+                <div class="ota-progress">
+                  <h4>Update progress</h4>
+                  <div class="progress-track">
+                    <div class="progress-fill" id="ota-progress-fill"></div>
+                  </div>
+                  <ul id="ota-steps-list"></ul>
+                </div>
+                <div class="ota-log">
+                  <h4>Progress log</h4>
+                  <ul id="ota-log-list"></ul>
+                </div>
+              </div>
+              <div class="ota-history">
+                <h4>Firmware history</h4>
+                <ul id="ota-history-list"></ul>
               </div>
             </section>
           </div>

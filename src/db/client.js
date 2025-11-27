@@ -40,6 +40,16 @@ CREATE TABLE IF NOT EXISTS robot_commands (
 
 CREATE INDEX IF NOT EXISTS idx_robot_commands_robotId ON robot_commands(robotId);
 
+CREATE TABLE IF NOT EXISTS robot_firmware_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  robotId TEXT NOT NULL,
+  version TEXT NOT NULL,
+  appliedAt TEXT NOT NULL,
+  FOREIGN KEY(robotId) REFERENCES robots(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_robot_firmware_robotId ON robot_firmware_history(robotId);
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,

@@ -5,6 +5,12 @@ const {
   updateRobotStatus,
   recordRobotCommand
 } = require('../repositories/robotRepository');
+const {
+  getCurrentVersion,
+  getHistory,
+  recordVersion,
+  ensureInitialVersion
+} = require('../repositories/firmwareRepository');
 const { getRobotInsights, simulateFirmwareUpdate } = require('../services/insightService');
 
 const safeNumber = (value) => {
@@ -121,6 +127,11 @@ const getInsightsHandler = (req, res) => {
     return res.status(404).json({ error: 'Robot not found' });
   }
   const data = getRobotInsights(robot.id);
+  const current = getCurrentVersion(robot.id);
+  ensureInitialVersion(robot.id);
+  data.ota.currentVersion = current.version;
+  data.ota.availableVersion = data.ota.availableVersion || 'V1';
+  data.firmwareHistory = getHistory(robot.id, 10);
   return res.json({ data });
 };
 
@@ -130,8 +141,14 @@ const triggerOtaHandler = (req, res) => {
     return res.status(404).json({ error: 'Robot not found' });
   }
   const payload = simulateFirmwareUpdate(robot.id, req.body);
+  recordVersion(robot.id, payload.targetVersion);
   recordRobotCommand(robot.id, { type: 'ota', value: payload.targetVersion });
-  return res.json({ data: payload });
+  return res.json({
+    data: {
+      ...payload,
+      history: getHistory(robot.id, 20)
+    }
+  });
 };
 
 const sendModeHandler = (req, res) => {

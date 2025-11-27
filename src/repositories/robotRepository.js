@@ -1,5 +1,6 @@
 const db = require('../db/client');
 const { generateId } = require('../utils/id');
+const firmwareRepo = require('./firmwareRepository');
 
 const defaultRobots = [
   {
@@ -37,24 +38,28 @@ const defaultRobots = [
   }
 ];
 
-const robotRowToEntity = (row) => ({
-  id: row.id,
-  name: row.name,
-  model: row.model,
-  batteryLevel: row.batteryLevel,
-  operationStatus: row.operationStatus,
-  temperatureC: row.temperatureC,
-  signalStrength: row.signalStrength,
-  location: row.location,
-  mission: row.mission,
-  lastHeartbeat: row.lastHeartbeat,
-  metrics: {
-    tasksCompleted: row.tasksCompleted,
-    uptimeHours: row.uptimeHours
-  },
-  notes: row.notes,
-  recentCommands: []
-});
+const robotRowToEntity = (row) => {
+  const firmware = firmwareRepo.getCurrentVersion(row.id);
+  return {
+    id: row.id,
+    name: row.name,
+    model: row.model,
+    batteryLevel: row.batteryLevel,
+    operationStatus: row.operationStatus,
+    temperatureC: row.temperatureC,
+    signalStrength: row.signalStrength,
+    location: row.location,
+    mission: row.mission,
+    lastHeartbeat: row.lastHeartbeat,
+    metrics: {
+      tasksCompleted: row.tasksCompleted,
+      uptimeHours: row.uptimeHours
+    },
+    notes: row.notes,
+    firmwareVersion: firmware.version,
+    recentCommands: []
+  };
+};
 
 const commandRowToEntity = (row) => ({
   id: row.id,
@@ -138,6 +143,7 @@ const getRobotById = (id) => {
 const createRobot = (payload) => {
   const record = buildRobotRecord(payload);
   insertRobotStmt.run(record);
+  firmwareRepo.ensureInitialVersion(record.id);
   return getRobotById(record.id);
 };
 

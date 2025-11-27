@@ -91,7 +91,8 @@ const getRobotInsights = (robotId) => {
 };
 
 const simulateFirmwareUpdate = (robotId, payload = {}) => {
-  const version = payload.targetVersion || generateOtaStatus(robotId).availableVersion;
+  const target = payload.targetVersion ? String(payload.targetVersion).toUpperCase() : null;
+  const version = target || 'V1';
   const steps = [
     'Queued update package',
     'Transferring binaries',
@@ -105,7 +106,8 @@ const simulateFirmwareUpdate = (robotId, payload = {}) => {
     progressLog: steps.map((message, idx) => ({
       step: idx + 1,
       message,
-      timestamp: new Date(Date.now() + idx * 5000).toISOString()
+      timestamp: new Date(Date.now() + idx * 5000).toISOString(),
+      progress: Math.round((idx / (steps.length - 1)) * 100)
     }))
   };
 };
