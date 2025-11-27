@@ -216,13 +216,16 @@ const renderDetail = () => {
 
   const statMap = [
     ['Battery', formatPercent(robot.batteryLevel)],
-    ['Signal', formatPercent(robot.signalStrength)],
     ['Temperature (°C)', formatNumber(robot.temperatureC)],
-    ['Location', robot.location || '—'],
-    ['Tasks completed', formatNumber(robot.metrics?.tasksCompleted)],
     ['Uptime (hours)', formatNumber(robot.metrics?.uptimeHours)],
     ['Last heartbeat', robot.lastHeartbeat ? new Date(robot.lastHeartbeat).toLocaleString() : '—'],
-    ['Notes', robot.notes || '—']
+    ['Last location', robot.location || '—'],
+    [
+      'Location coordinates',
+      robot.insightsLocation
+        ? `${robot.insightsLocation.lat.toFixed(4)}, ${robot.insightsLocation.lng.toFixed(4)}`
+        : '—'
+    ]
   ];
 
   selectors.detailStats.innerHTML = '';
@@ -535,6 +538,7 @@ const renderInsights = () => {
   const data = state.insights[robot.id];
   if (!data) return;
   selectors.detailMission.textContent = data.telemetry?.missionStatus || robot.mission || 'No mission assigned';
+  robot.insightsLocation = data.map?.lastKnownLocation;
   if (selectors.teleopFeed && data.telemetry?.cameraFeedUrl) {
     selectors.teleopFeed.src = data.telemetry.cameraFeedUrl;
   }
