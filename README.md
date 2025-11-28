@@ -25,6 +25,10 @@ npm start          # plain node
 
 The server listens on `http://localhost:3000` by default. The UI is served from the same port.
 
+### Default credentials
+- Username: `hackathon`
+- Password: `hackathon`
+
 ## API
 
 | Method | Path                       | Description                            |
