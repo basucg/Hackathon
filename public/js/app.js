@@ -98,7 +98,10 @@ const selectors = {
   armHand: document.getElementById('arm-hand'),
   jointElbowPreview: document.getElementById('joint-elbow-preview'),
   jointWristPreview: document.getElementById('joint-wrist-preview'),
-  handEffector: document.getElementById('hand-effector')
+  handEffector: document.getElementById('hand-effector'),
+  gripToggleBtn: document.getElementById('grip-toggle-btn'),
+  payloadButton: document.getElementById('payload-btn'),
+  payloadStatus: document.getElementById('payload-status')
 };
 
 const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
@@ -110,13 +113,31 @@ const manipulatorState = {
   wrist: 0
 };
 const ARM_LENGTHS = {
-  upper: 80,
+  upper: 85,
   forearm: 70,
-  hand: 40
+  hand: 45
 };
-const ARM_BASE = { x: 120, y: 210 };
+const ARM_BASE = { x: 130, y: 230 };
+const ARM_BOUNDS = { minX: 20, maxX: 240, minY: 20, maxY: 240 };
+const JOINT_RANGES = {
+  shoulder: { min: -30, max: 150 },
+  elbow: { min: 0, max: 135 },
+  wrist: { min: -90, max: 90 }
+};
+const LOAD_COMPENSATION = {
+  shoulder: 12,
+  elbow: 10,
+  wrist: -15
+};
+const handState = {
+  gripEngaged: false,
+  payloadKg: 0,
+  lastManualPose: { ...manipulatorState }
+};
 
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const snapshotPose = () => ({ ...manipulatorState });
 
 const ensureDesignMindsId = (robot, index) => {
   const providedId = [robot.designMindsId, robot.uniqueId].find(
@@ -197,6 +218,64 @@ const renderOverviewStats = (robot) => {
 };
 
 const toRadians = (deg) => (deg * Math.PI) / 180;
+const keepPointInBounds = (point) => ({
+  x: clamp(point.x, ARM_BOUNDS.minX, ARM_BOUNDS.maxX),
+  y: clamp(point.y, ARM_BOUNDS.minY, ARM_BOUNDS.maxY)
+});
+
+const rememberManualPose = () => {
+  handState.lastManualPose = snapshotPose();
+};
+
+const applyLoadCompensation = () => {
+  manipulatorState.shoulder = clamp(
+    manipulatorState.shoulder + LOAD_COMPENSATION.shoulder,
+    JOINT_RANGES.shoulder.min,
+    Math.min(JOINT_RANGES.shoulder.max, 135)
+  );
+  manipulatorState.elbow = clamp(
+    manipulatorState.elbow + LOAD_COMPENSATION.elbow,
+    JOINT_RANGES.elbow.min,
+    Math.min(JOINT_RANGES.elbow.max, 125)
+  );
+  manipulatorState.wrist = clamp(
+    manipulatorState.wrist + LOAD_COMPENSATION.wrist,
+    JOINT_RANGES.wrist.min,
+    JOINT_RANGES.wrist.max
+  );
+};
+
+const updatePayloadUI = () => {
+  if (selectors.payloadStatus) {
+    const gripDescriptor = handState.gripEngaged ? 'Grip engaged' : 'Hand open';
+    const payloadDescriptor = handState.payloadKg ? `Carrying ${handState.payloadKg} kg` : 'No payload';
+    selectors.payloadStatus.textContent = `${gripDescriptor} · ${payloadDescriptor}`;
+  }
+  if (selectors.gripToggleBtn) {
+    selectors.gripToggleBtn.textContent = handState.gripEngaged ? 'Release grip' : 'Engage grip';
+    selectors.gripToggleBtn.disabled = handState.payloadKg > 0;
+  }
+  if (selectors.payloadButton) {
+    selectors.payloadButton.textContent = handState.payloadKg ? 'Release payload' : 'Pick up 5 kg load';
+  }
+  const disableSliders = handState.payloadKg > 0;
+  [selectors.jointShoulderInput, selectors.jointElbowInput, selectors.jointWristInput].forEach((input) => {
+    if (input) {
+      input.disabled = disableSliders;
+    }
+  });
+};
+
+const updateManipulatorUI = () => {
+  if (selectors.jointShoulderInput) selectors.jointShoulderInput.value = manipulatorState.shoulder;
+  if (selectors.jointElbowInput) selectors.jointElbowInput.value = manipulatorState.elbow;
+  if (selectors.jointWristInput) selectors.jointWristInput.value = manipulatorState.wrist;
+  if (selectors.jointShoulderValue) selectors.jointShoulderValue.textContent = degreesLabel(manipulatorState.shoulder);
+  if (selectors.jointElbowValue) selectors.jointElbowValue.textContent = degreesLabel(manipulatorState.elbow);
+  if (selectors.jointWristValue) selectors.jointWristValue.textContent = degreesLabel(manipulatorState.wrist);
+  updatePayloadUI();
+  updateArmPreview();
+};
 
 const updateArmPreview = () => {
   if (!selectors.armUpper || !selectors.armForearm || !selectors.armHand) return;
@@ -204,20 +283,20 @@ const updateArmPreview = () => {
   const elbowRad = shoulderRad + toRadians(manipulatorState.elbow);
   const wristRad = elbowRad + toRadians(manipulatorState.wrist);
 
-  const shoulderEnd = {
+  const shoulderEnd = keepPointInBounds({
     x: ARM_BASE.x + Math.sin(shoulderRad) * ARM_LENGTHS.upper,
     y: ARM_BASE.y - Math.cos(shoulderRad) * ARM_LENGTHS.upper
-  };
+  });
 
-  const wristPoint = {
+  const wristPoint = keepPointInBounds({
     x: shoulderEnd.x + Math.sin(elbowRad) * ARM_LENGTHS.forearm,
     y: shoulderEnd.y - Math.cos(elbowRad) * ARM_LENGTHS.forearm
-  };
+  });
 
-  const handPoint = {
+  const handPoint = keepPointInBounds({
     x: wristPoint.x + Math.sin(wristRad) * ARM_LENGTHS.hand,
     y: wristPoint.y - Math.cos(wristRad) * ARM_LENGTHS.hand
-  };
+  });
 
   const setLine = (el, start, end) => {
     el.setAttribute('x1', start.x.toFixed(1));
@@ -241,6 +320,50 @@ const updateArmPreview = () => {
   if (selectors.handEffector) {
     selectors.handEffector.setAttribute('cx', handPoint.x.toFixed(1));
     selectors.handEffector.setAttribute('cy', handPoint.y.toFixed(1));
+  }
+};
+
+const toggleGrip = () => {
+  if (handState.payloadKg > 0) {
+    return setMessage(selectors.manipulatorMessage, 'Release payload before opening the grip.', 'error');
+  }
+  handState.gripEngaged = !handState.gripEngaged;
+  updateManipulatorUI();
+  setMessage(
+    selectors.manipulatorMessage,
+    handState.gripEngaged ? 'Grip engaged for precision control.' : 'Grip released.',
+    'success'
+  );
+};
+
+const engagePayload = () => {
+  rememberManualPose();
+  applyLoadCompensation();
+  handState.payloadKg = 5;
+  handState.gripEngaged = true;
+  updateManipulatorUI();
+  setMessage(
+    selectors.manipulatorMessage,
+    'Payload secured. Internal joints adjusted for 5 kg load.',
+    'success'
+  );
+};
+
+const releasePayload = () => {
+  handState.payloadKg = 0;
+  if (handState.lastManualPose) {
+    Object.assign(manipulatorState, handState.lastManualPose);
+  }
+  rememberManualPose();
+  updateManipulatorUI();
+  setMessage(selectors.manipulatorMessage, 'Payload released. Restored manual articulation.', 'success');
+};
+
+const togglePayload = () => {
+  if (handState.payloadKg > 0) {
+    releasePayload();
+  } else {
+    engagePayload();
   }
 };
 
@@ -579,7 +702,11 @@ const sendManipulatorCommand = async () => {
       robotId: robot.id,
       type: 'manipulator',
       value: 'joint-update',
-      metadata: { ...manipulatorState }
+      metadata: {
+        ...manipulatorState,
+        grip: handState.gripEngaged ? 'gripped' : 'open',
+        payloadKg: handState.payloadKg
+      }
     });
     setMessage(selectors.manipulatorMessage, 'Joint update dispatched.', 'success');
   } catch (error) {
@@ -684,8 +811,8 @@ const handleLogout = async () => {
 
 selectors.refreshButton.addEventListener('click', loadRobots);
 selectors.statusForm.addEventListener('submit', sendStatusUpdate);
-selectors.directionPad.addEventListener('click', handleDirection);
-selectors.customCommandForm.addEventListener('submit', sendCustomCommand);
+selectors.directionPad?.addEventListener('click', handleDirection);
+selectors.customCommandForm?.addEventListener('submit', sendCustomCommand);
 selectors.loginForm.addEventListener('submit', handleLoginSubmit);
 selectors.logoutButton.addEventListener('click', handleLogout);
 selectors.modeButtons.forEach((button) => button.addEventListener('click', handleModeChange));
@@ -706,11 +833,19 @@ selectors.themeToggle.addEventListener('change', (event) => {
   ['wrist', selectors.jointWristInput]
 ].forEach(([joint, input]) => {
   input?.addEventListener('input', (event) => {
-    manipulatorState[joint] = Number(event.target.value);
+    const value = Number(event.target.value);
+    manipulatorState[joint] = clamp(value, JOINT_RANGES[joint].min, JOINT_RANGES[joint].max);
+    if (handState.payloadKg === 0) {
+      rememberManualPose();
+    } else {
+      applyLoadCompensation();
+    }
     updateManipulatorUI();
   });
 });
 selectors.manipulatorSendButton?.addEventListener('click', sendManipulatorCommand);
+selectors.gripToggleBtn?.addEventListener('click', toggleGrip);
+selectors.payloadButton?.addEventListener('click', togglePayload);
 updateManipulatorUI();
 
 const bootstrap = async () => {
