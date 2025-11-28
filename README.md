@@ -67,12 +67,12 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
 - Use any SQLite browser to inspect the tables (`robots`, `robot_commands`, `robot_firmware_history`) if you need direct access.
 
 ## Authentication
-- Default credentials: `robot-admin` / `robotops` (change by updating the seed logic in `src/repositories/authRepository.js`).
+- Default credentials: `hackathon` / `hackathon` (override via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars if needed).
 - Sessions are issued as bearer tokens stored in SQLite; the frontend keeps the token in `localStorage` and includes it on every API call.
 - Use the **Logout** button or delete `localStorage.rebotToken` to end a session; tokens also become invalid if removed from the `sessions` table.
 
 ## Frontend workflow
-1. Sign in (`robot-admin` / `robotops`) to unlock the console. Tokens persist in `localStorage`.
+1. Sign in (`hackathon` / `hackathon`) to unlock the console. Tokens persist in `localStorage`.
 2. Hit **Refresh Telemetry** to pull the latest API response.
 3. Click any robot card to load its multi-tab detail view.
 4. Tabs:
