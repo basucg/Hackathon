@@ -388,6 +388,13 @@ p {
   gap: 0.85rem;
 }
 
+.joint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .joint-slider span {
   display: flex;
   justify-content: space-between;

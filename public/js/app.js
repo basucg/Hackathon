@@ -92,6 +92,8 @@ const selectors = {
   jointWristValue: document.getElementById('joint-wrist-value'),
   manipulatorMessage: document.getElementById('manipulator-message'),
   manipulatorSendButton: document.getElementById('apply-manipulator-btn'),
+  gripHoldButton: document.getElementById('grip-hold-btn'),
+  gripReleaseButton: document.getElementById('grip-release-btn'),
   armVisual: document.getElementById('arm-visual'),
   armUpper: document.getElementById('arm-upper'),
   armForearm: document.getElementById('arm-forearm'),
