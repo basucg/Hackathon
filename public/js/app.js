@@ -83,12 +83,38 @@ const selectors = {
   otaStepsList: document.getElementById('ota-steps-list'),
   otaHistoryList: document.getElementById('ota-history-list'),
   otaFailureToggle: document.getElementById('ota-failure-toggle'),
-  themeToggle: document.getElementById('theme-toggle-input')
+  themeToggle: document.getElementById('theme-toggle-input'),
+  jointShoulderInput: document.getElementById('joint-shoulder'),
+  jointElbowInput: document.getElementById('joint-elbow'),
+  jointWristInput: document.getElementById('joint-wrist'),
+  jointShoulderValue: document.getElementById('joint-shoulder-value'),
+  jointElbowValue: document.getElementById('joint-elbow-value'),
+  jointWristValue: document.getElementById('joint-wrist-value'),
+  manipulatorMessage: document.getElementById('manipulator-message'),
+  manipulatorSendButton: document.getElementById('apply-manipulator-btn'),
+  armVisual: document.getElementById('arm-visual'),
+  armUpper: document.getElementById('arm-upper'),
+  armForearm: document.getElementById('arm-forearm'),
+  armHand: document.getElementById('arm-hand'),
+  jointElbowPreview: document.getElementById('joint-elbow-preview'),
+  jointWristPreview: document.getElementById('joint-wrist-preview'),
+  handEffector: document.getElementById('hand-effector')
 };
 
 const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
 const DESIGN_MINDS_PATTERN = /^HACK_DESIGNMINDS_\d+$/;
 const ONLINE_SUBSTATES = new Set(['idle', 'charging', 'work']);
+const manipulatorState = {
+  shoulder: 45,
+  elbow: 60,
+  wrist: 0
+};
+const ARM_LENGTHS = {
+  upper: 80,
+  forearm: 70,
+  hand: 40
+};
+const ARM_BASE = { x: 120, y: 210 };
 
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
 
@@ -131,6 +157,7 @@ const formatHeartbeat = (value) => (value ? new Date(value).toLocaleString() : '
 const formatTimeOnly = (value) => (value ? new Date(value).toLocaleTimeString() : '—');
 const formatTemperature = (value) => (value !== undefined ? `${value} °C` : '—');
 const formatUptime = (value) => (value !== undefined ? `${value} h` : '—');
+const degreesLabel = (value) => `${Math.round(value)}°`;
 
 const buildStatsRows = (stats) => {
   if (!selectors.detailStats) return;
@@ -167,6 +194,64 @@ const renderOverviewStats = (robot) => {
     { label: 'Temperature', value: formatTemperature(robot.temperatureC) }
   ];
   buildStatsRows(stats);
+};
+
+const toRadians = (deg) => (deg * Math.PI) / 180;
+
+const updateArmPreview = () => {
+  if (!selectors.armUpper || !selectors.armForearm || !selectors.armHand) return;
+  const shoulderRad = toRadians(manipulatorState.shoulder);
+  const elbowRad = shoulderRad + toRadians(manipulatorState.elbow);
+  const wristRad = elbowRad + toRadians(manipulatorState.wrist);
+
+  const shoulderEnd = {
+    x: ARM_BASE.x + Math.sin(shoulderRad) * ARM_LENGTHS.upper,
+    y: ARM_BASE.y - Math.cos(shoulderRad) * ARM_LENGTHS.upper
+  };
+
+  const wristPoint = {
+    x: shoulderEnd.x + Math.sin(elbowRad) * ARM_LENGTHS.forearm,
+    y: shoulderEnd.y - Math.cos(elbowRad) * ARM_LENGTHS.forearm
+  };
+
+  const handPoint = {
+    x: wristPoint.x + Math.sin(wristRad) * ARM_LENGTHS.hand,
+    y: wristPoint.y - Math.cos(wristRad) * ARM_LENGTHS.hand
+  };
+
+  const setLine = (el, start, end) => {
+    el.setAttribute('x1', start.x.toFixed(1));
+    el.setAttribute('y1', start.y.toFixed(1));
+    el.setAttribute('x2', end.x.toFixed(1));
+    el.setAttribute('y2', end.y.toFixed(1));
+  };
+
+  setLine(selectors.armUpper, ARM_BASE, shoulderEnd);
+  setLine(selectors.armForearm, shoulderEnd, wristPoint);
+  setLine(selectors.armHand, wristPoint, handPoint);
+
+  if (selectors.jointElbowPreview) {
+    selectors.jointElbowPreview.setAttribute('cx', shoulderEnd.x.toFixed(1));
+    selectors.jointElbowPreview.setAttribute('cy', shoulderEnd.y.toFixed(1));
+  }
+  if (selectors.jointWristPreview) {
+    selectors.jointWristPreview.setAttribute('cx', wristPoint.x.toFixed(1));
+    selectors.jointWristPreview.setAttribute('cy', wristPoint.y.toFixed(1));
+  }
+  if (selectors.handEffector) {
+    selectors.handEffector.setAttribute('cx', handPoint.x.toFixed(1));
+    selectors.handEffector.setAttribute('cy', handPoint.y.toFixed(1));
+  }
+};
+
+const updateManipulatorUI = () => {
+  if (selectors.jointShoulderInput) selectors.jointShoulderInput.value = manipulatorState.shoulder;
+  if (selectors.jointElbowInput) selectors.jointElbowInput.value = manipulatorState.elbow;
+  if (selectors.jointWristInput) selectors.jointWristInput.value = manipulatorState.wrist;
+  if (selectors.jointShoulderValue) selectors.jointShoulderValue.textContent = degreesLabel(manipulatorState.shoulder);
+  if (selectors.jointElbowValue) selectors.jointElbowValue.textContent = degreesLabel(manipulatorState.elbow);
+  if (selectors.jointWristValue) selectors.jointWristValue.textContent = degreesLabel(manipulatorState.wrist);
+  updateArmPreview();
 };
 
 const toJSON = async (response) => {
@@ -484,6 +569,24 @@ const sendCustomCommand = async (event) => {
   }
 };
 
+const sendManipulatorCommand = async () => {
+  const robot = getSelectedRobot();
+  if (!robot) {
+    return setMessage(selectors.manipulatorMessage, 'Select a robot first.', 'error');
+  }
+  try {
+    await sendCommand({
+      robotId: robot.id,
+      type: 'manipulator',
+      value: 'joint-update',
+      metadata: { ...manipulatorState }
+    });
+    setMessage(selectors.manipulatorMessage, 'Joint update dispatched.', 'success');
+  } catch (error) {
+    setMessage(selectors.manipulatorMessage, error.message, 'error');
+  }
+};
+
 const handleModeChange = async (event) => {
   const { mode } = event.target.dataset;
   if (!mode) return;
@@ -597,6 +700,18 @@ selectors.themeToggle.addEventListener('change', (event) => {
     document.body.removeAttribute('data-theme');
   }
 });
+[
+  ['shoulder', selectors.jointShoulderInput],
+  ['elbow', selectors.jointElbowInput],
+  ['wrist', selectors.jointWristInput]
+].forEach(([joint, input]) => {
+  input?.addEventListener('input', (event) => {
+    manipulatorState[joint] = Number(event.target.value);
+    updateManipulatorUI();
+  });
+});
+selectors.manipulatorSendButton?.addEventListener('click', sendManipulatorCommand);
+updateManipulatorUI();
 
 const bootstrap = async () => {
   if (!auth.token) {

@@ -205,6 +205,48 @@
                     <p class="helptext" id="command-message"></p>
                   </form>
                 </div>
+                <article class="manipulator-card">
+                  <div class="panel-title">
+                    <h3>Hand articulation</h3>
+                    <p class="muted">Tune shoulder, elbow, and wrist angles</p>
+                  </div>
+                  <div class="joint-grid">
+                    <label class="joint-slider">
+                      <span>
+                        Shoulder
+                        <strong id="joint-shoulder-value">45°</strong>
+                      </span>
+                      <input id="joint-shoulder" type="range" min="-30" max="150" value="45" />
+                    </label>
+                    <label class="joint-slider">
+                      <span>
+                        Elbow
+                        <strong id="joint-elbow-value">60°</strong>
+                      </span>
+                      <input id="joint-elbow" type="range" min="0" max="135" value="60" />
+                    </label>
+                    <label class="joint-slider">
+                      <span>
+                        Wrist
+                        <strong id="joint-wrist-value">0°</strong>
+                      </span>
+                      <input id="joint-wrist" type="range" min="-90" max="90" value="0" />
+                    </label>
+                  </div>
+                  <button class="secondary" type="button" id="apply-manipulator-btn">Send joint update</button>
+                  <p class="helptext" id="manipulator-message"></p>
+                  <div class="arm-preview">
+                    <svg id="arm-visual" viewBox="0 0 240 240" role="img" aria-label="Hand movement preview">
+                      <line id="arm-upper" class="arm-line" x1="120" y1="210" x2="120" y2="110" />
+                      <line id="arm-forearm" class="arm-line" x1="120" y1="110" x2="120" y2="50" />
+                      <line id="arm-hand" class="arm-line hand-line" x1="120" y1="50" x2="120" y2="30" />
+                      <circle class="arm-joint" cx="120" cy="210" r="6" />
+                      <circle id="joint-elbow-preview" class="arm-joint" cx="120" cy="110" r="5" />
+                      <circle id="joint-wrist-preview" class="arm-joint" cx="120" cy="50" r="5" />
+                      <circle id="hand-effector" class="hand-effector" cx="120" cy="30" r="6" />
+                    </svg>
+                  </div>
+                </article>
               </div>
             </section>
 
