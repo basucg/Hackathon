@@ -19,8 +19,8 @@ const insertSessionStmt = db.prepare(
 const selectSessionStmt = db.prepare('SELECT * FROM sessions WHERE token = ?');
 const deleteSessionStmt = db.prepare('DELETE FROM sessions WHERE token = ?');
 
-const DEFAULT_ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'robot-admin';
-const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'robotops';
+const DEFAULT_ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'hackathon';
+const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'hackathon';
 const DEFAULT_ADMIN_ROLE = process.env.ADMIN_ROLE || 'admin';
 
 const ensureDefaultAdmin = () => {
