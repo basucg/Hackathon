@@ -55,7 +55,6 @@ const selectors = {
   statusMessage: document.getElementById('status-message'),
   tabButtons: document.querySelectorAll('.tab-button'),
   tabPanels: document.querySelectorAll('[data-tab-panel]'),
-  teleopFeed: document.getElementById('teleop-feed'),
   mapView: document.getElementById('map-view'),
   pathLogList: document.getElementById('path-log-list'),
   velocityChart: document.getElementById('velocity-chart'),
@@ -86,6 +85,7 @@ const selectors = {
   manipulatorSendButton: document.getElementById('apply-manipulator-btn'),
   gripHoldButton: document.getElementById('grip-hold-btn'),
   gripReleaseButton: document.getElementById('grip-release-btn'),
+  gripStatus: document.getElementById('grip-status'),
   armVisual: document.getElementById('arm-visual'),
   armUpper: document.getElementById('arm-upper'),
   armForearm: document.getElementById('arm-forearm'),
@@ -95,22 +95,28 @@ const selectors = {
   handEffector: document.getElementById('hand-effector')
 };
 
+const fingerSegments = ['finger-1', 'finger-2', 'finger-3'].map((id) => document.getElementById(id));
+
 const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
 const DESIGN_MINDS_PATTERN = /^HACK_DESIGNMINDS_\d+$/;
 const ONLINE_SUBSTATES = new Set(['idle', 'charging', 'work']);
 const manipulatorState = {
   shoulder: 45,
   elbow: 60,
-  wrist: 0
+  wrist: 0,
+  grip: 0
 };
 const ARM_LENGTHS = {
-  upper: 80,
-  forearm: 70,
-  hand: 40
+  upper: 110,
+  forearm: 90,
+  hand: 60
 };
-const ARM_BASE = { x: 120, y: 210 };
+const FINGER_BASE_OFFSETS = [-0.3, 0, 0.3];
+const FINGER_LENGTH = 30;
+const ARM_BASE = { x: 160, y: 300 };
 
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const ensureDesignMindsId = (robot, index) => {
   const providedId = [robot.designMindsId, robot.uniqueId].find(
@@ -236,6 +242,19 @@ const updateArmPreview = () => {
     selectors.handEffector.setAttribute('cx', handPoint.x.toFixed(1));
     selectors.handEffector.setAttribute('cy', handPoint.y.toFixed(1));
   }
+
+  const curl = manipulatorState.grip * 0.5;
+  const spreadBase = 0.35 - manipulatorState.grip * 0.2;
+  fingerSegments.forEach((finger, index) => {
+    if (!finger) return;
+    const offset = FINGER_BASE_OFFSETS[index] * spreadBase;
+    const fingerAngle = wristRad + offset + curl;
+    const fingerEnd = {
+      x: handPoint.x + Math.sin(fingerAngle) * FINGER_LENGTH,
+      y: handPoint.y - Math.cos(fingerAngle) * FINGER_LENGTH
+    };
+    setLine(finger, handPoint, fingerEnd);
+  });
 };
 
 const updateManipulatorUI = () => {
@@ -245,7 +264,25 @@ const updateManipulatorUI = () => {
   if (selectors.jointShoulderValue) selectors.jointShoulderValue.textContent = degreesLabel(manipulatorState.shoulder);
   if (selectors.jointElbowValue) selectors.jointElbowValue.textContent = degreesLabel(manipulatorState.elbow);
   if (selectors.jointWristValue) selectors.jointWristValue.textContent = degreesLabel(manipulatorState.wrist);
+  if (selectors.gripStatus) {
+    selectors.gripStatus.textContent = `Grip: ${manipulatorState.grip >= 0.5 ? 'hold' : 'open'}`;
+  }
   updateArmPreview();
+};
+
+const setGripState = (value) => {
+  manipulatorState.grip = clamp(value, 0, 1);
+  updateManipulatorUI();
+};
+
+const handleGripHold = () => {
+  setGripState(1);
+  setMessage(selectors.manipulatorMessage, 'Grip hold engaged.', 'success');
+};
+
+const handleGripRelease = () => {
+  setGripState(0);
+  setMessage(selectors.manipulatorMessage, 'Grip released.', 'success');
 };
 
 const toJSON = async (response) => {
@@ -515,7 +552,12 @@ const sendManipulatorCommand = async () => {
       robotId: robot.id,
       type: 'manipulator',
       value: 'joint-update',
-      metadata: { ...manipulatorState }
+      metadata: {
+        shoulder: manipulatorState.shoulder,
+        elbow: manipulatorState.elbow,
+        wrist: manipulatorState.wrist,
+        grip: manipulatorState.grip >= 0.5 ? 'hold' : 'open'
+      }
     });
     setMessage(selectors.manipulatorMessage, 'Joint update dispatched.', 'success');
   } catch (error) {
@@ -624,6 +666,8 @@ selectors.themeToggle.addEventListener('change', (event) => {
   });
 });
 selectors.manipulatorSendButton?.addEventListener('click', sendManipulatorCommand);
+selectors.gripHoldButton?.addEventListener('click', handleGripHold);
+selectors.gripReleaseButton?.addEventListener('click', handleGripRelease);
 updateManipulatorUI();
 
 const bootstrap = async () => {

@@ -156,18 +156,15 @@
             </section>
 
             <section class="tab-panel hidden" data-tab-panel="teleop">
-              <div class="teleop-grid">
-                <div class="video-panel">
-                  <video id="teleop-feed" autoplay loop muted playsinline poster="https://storage.googleapis.com/robot-demo-assets/teleop-poster.jpg">
-                    <source src="https://storage.googleapis.com/robot-demo-assets/patrol-feed.mp4" type="video/mp4" />
-                  </video>
-                  <p class="muted small">Simulated camera feed</p>
-                </div>
-                <article class="manipulator-card">
-                  <div class="panel-title">
-                    <h3>Hand articulation</h3>
-                    <p class="muted">Tune shoulder, elbow, and wrist angles</p>
+              <article class="manipulator-card full-width">
+                <div class="panel-title">
+                  <div>
+                    <h3>Robotic arm teleoperation</h3>
+                    <p class="muted">Set joint angles and control finger grip in real time.</p>
                   </div>
+                  <div class="grip-status" id="grip-status">Grip: open</div>
+                </div>
+                <div class="teleop-layout">
                   <div class="joint-grid">
                     <label class="joint-slider">
                       <span>
@@ -190,46 +187,38 @@
                       </span>
                       <input id="joint-wrist" type="range" min="-90" max="90" value="0" />
                     </label>
-                  </div>
-                  <div class="joint-actions">
-                    <button class="secondary" type="button" id="apply-manipulator-btn">Send joint update</button>
-                    <button class="secondary" type="button" id="grip-hold-btn">Grip hold</button>
-                    <button class="secondary" type="button" id="grip-release-btn">Grip release</button>
+                    <div class="joint-actions">
+                      <button class="secondary" type="button" id="apply-manipulator-btn">Send joint update</button>
+                      <button class="secondary" type="button" id="grip-hold-btn">Grip hold</button>
+                      <button class="secondary" type="button" id="grip-release-btn">Grip release</button>
+                    </div>
                     <p class="helptext" id="manipulator-message"></p>
                   </div>
-                  <div class="arm-visuals">
-                    <div class="arm-preview">
-                      <svg id="arm-visual" viewBox="0 0 240 240" role="img" aria-label="Hand movement preview">
-                        <line id="arm-upper" class="arm-line" x1="120" y1="210" x2="120" y2="110" />
-                        <line id="arm-forearm" class="arm-line" x1="120" y1="110" x2="120" y2="50" />
-                        <line id="arm-hand" class="arm-line hand-line" x1="120" y1="50" x2="120" y2="30" />
-                        <circle class="arm-joint" cx="120" cy="210" r="6" />
-                        <circle id="joint-elbow-preview" class="arm-joint" cx="120" cy="110" r="5" />
-                        <circle id="joint-wrist-preview" class="arm-joint" cx="120" cy="50" r="5" />
-                        <circle id="hand-effector" class="hand-effector" cx="120" cy="30" r="6" />
-                      </svg>
-                    </div>
-                    <figure class="arm-reference">
-                      <svg viewBox="0 0 200 200" role="img" aria-label="Reference robotic arm" class="arm-reference-art">
-                        <defs>
-                          <linearGradient id="armGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#4cc9f0" />
-                            <stop offset="100%" stop-color="#2563eb" />
-                          </linearGradient>
-                        </defs>
-                        <rect x="92" y="140" width="16" height="48" rx="6" fill="#0f172a" opacity="0.6" />
-                        <line x1="100" y1="140" x2="70" y2="95" stroke="url(#armGradient)" stroke-width="10" stroke-linecap="round" />
-                        <line x1="70" y1="95" x2="88" y2="50" stroke="#f43f5e" stroke-width="8" stroke-linecap="round" />
-                        <circle cx="100" cy="140" r="7" fill="#0f172a" stroke="#4cc9f0" stroke-width="3" />
-                        <circle cx="70" cy="95" r="6" fill="#0f172a" stroke="#4cc9f0" stroke-width="3" />
-                        <circle cx="88" cy="50" r="6" fill="#0f172a" stroke="#f43f5e" stroke-width="3" />
-                        <path d="M88 44 L104 40 L110 50 L94 56 Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" />
-                      </svg>
-                      <figcaption>Reference robotic arm posture</figcaption>
-                    </figure>
+                  <div class="arm-stage">
+                    <svg id="arm-visual" viewBox="0 0 320 360" role="img" aria-label="Robotic arm preview">
+                      <defs>
+                        <linearGradient id="armMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#4cc9f0" />
+                          <stop offset="100%" stop-color="#2563eb" />
+                        </linearGradient>
+                      </defs>
+                      <rect x="150" y="300" width="20" height="40" rx="8" fill="#0f172a" opacity="0.65" />
+                      <line id="arm-upper" class="arm-line" x1="160" y1="300" x2="160" y2="190" />
+                      <line id="arm-forearm" class="arm-line" x1="160" y1="190" x2="160" y2="110" />
+                      <line id="arm-hand" class="arm-line hand-line" x1="160" y1="110" x2="160" y2="70" />
+                      <g id="arm-fingers" class="arm-fingers">
+                        <line id="finger-1" class="finger-line" x1="160" y1="70" x2="160" y2="50" />
+                        <line id="finger-2" class="finger-line" x1="160" y1="70" x2="160" y2="50" />
+                        <line id="finger-3" class="finger-line" x1="160" y1="70" x2="160" y2="50" />
+                      </g>
+                      <circle class="arm-joint" cx="160" cy="300" r="9" />
+                      <circle id="joint-elbow-preview" class="arm-joint" cx="160" cy="190" r="7" />
+                      <circle id="joint-wrist-preview" class="arm-joint" cx="160" cy="110" r="6" />
+                      <circle id="hand-effector" class="hand-effector" cx="160" cy="70" r="8" />
+                    </svg>
                   </div>
-                </article>
-              </div>
+                </div>
+              </article>
             </section>
 
             <section class="tab-panel hidden" data-tab-panel="map">
