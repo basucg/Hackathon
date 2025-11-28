@@ -684,8 +684,8 @@ const handleLogout = async () => {
 
 selectors.refreshButton.addEventListener('click', loadRobots);
 selectors.statusForm.addEventListener('submit', sendStatusUpdate);
-selectors.directionPad.addEventListener('click', handleDirection);
-selectors.customCommandForm.addEventListener('submit', sendCustomCommand);
+selectors.directionPad?.addEventListener('click', handleDirection);
+selectors.customCommandForm?.addEventListener('submit', sendCustomCommand);
 selectors.loginForm.addEventListener('submit', handleLoginSubmit);
 selectors.logoutButton.addEventListener('click', handleLogout);
 selectors.modeButtons.forEach((button) => button.addEventListener('click', handleModeChange));

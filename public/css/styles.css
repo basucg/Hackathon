@@ -407,6 +407,13 @@ p {
   accent-color: var(--accent);
 }
 
+.arm-visuals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  align-items: center;
+}
+
 .arm-preview {
   border: 1px dashed var(--border);
   border-radius: 14px;
@@ -417,9 +424,7 @@ p {
 .arm-preview svg {
   width: 100%;
   height: auto;
-  max-width: 280px;
   display: block;
-  margin: 0 auto;
 }
 
 .arm-line {
@@ -443,6 +448,20 @@ p {
 .hand-effector {
   fill: rgba(244, 63, 94, 0.6);
   stroke: rgba(244, 63, 94, 0.4);
+}
+
+.arm-reference {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.arm-reference-art {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  display: block;
+  margin: 0 auto 0.35rem;
 }
 
 .mode-buttons {
