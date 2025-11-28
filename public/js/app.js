@@ -95,7 +95,9 @@ const selectors = {
   handEffector: document.getElementById('hand-effector')
 };
 
-const fingerSegments = ['finger-1', 'finger-2', 'finger-3'].map((id) => document.getElementById(id));
+const fingerSegments = ['finger-1', 'finger-2', 'finger-3', 'finger-4', 'finger-5'].map((id) =>
+  document.getElementById(id)
+);
 
 const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
 const DESIGN_MINDS_PATTERN = /^HACK_DESIGNMINDS_\d+$/;
@@ -108,12 +110,12 @@ const manipulatorState = {
 };
 const ARM_LENGTHS = {
   upper: 110,
-  forearm: 90,
-  hand: 60
+  forearm: 110,
+  hand: 70
 };
-const FINGER_BASE_OFFSETS = [-0.3, 0, 0.3];
-const FINGER_LENGTH = 30;
-const ARM_BASE = { x: 160, y: 300 };
+const FINGER_BASE_OFFSETS = [-0.35, -0.15, 0, 0.15, 0.35];
+const FINGER_LENGTH = 45;
+const ARM_BASE = { x: 160, y: 80 };
 
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -690,9 +692,6 @@ const renderInsights = () => {
   if (!data) return;
   robot.insightsLocation = data.map?.lastKnownLocation;
   renderOverviewStats(robot);
-  if (selectors.teleopFeed && data.telemetry?.cameraFeedUrl) {
-    selectors.teleopFeed.src = data.telemetry.cameraFeedUrl;
-  }
   renderMapPanel(data);
   renderCharts(data);
   renderHealthPanel(data);

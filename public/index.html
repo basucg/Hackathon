@@ -160,7 +160,7 @@
                 <div class="panel-title">
                   <div>
                     <h3>Robotic arm teleoperation</h3>
-                    <p class="muted">Set joint angles and control finger grip in real time.</p>
+                    <p class="muted">Align shoulder → elbow → wrist joints and drive a five-finger gripper.</p>
                   </div>
                   <div class="grip-status" id="grip-status">Grip: open</div>
                 </div>
@@ -195,26 +195,28 @@
                     <p class="helptext" id="manipulator-message"></p>
                   </div>
                   <div class="arm-stage">
-                    <svg id="arm-visual" viewBox="0 0 320 360" role="img" aria-label="Robotic arm preview">
+                    <svg id="arm-visual" viewBox="0 0 360 420" role="img" aria-label="Robotic arm preview">
                       <defs>
                         <linearGradient id="armMetal" x1="0%" y1="0%" x2="100%" y2="100%">
                           <stop offset="0%" stop-color="#4cc9f0" />
                           <stop offset="100%" stop-color="#2563eb" />
                         </linearGradient>
                       </defs>
-                      <rect x="150" y="300" width="20" height="40" rx="8" fill="#0f172a" opacity="0.65" />
-                      <line id="arm-upper" class="arm-line" x1="160" y1="300" x2="160" y2="190" />
-                      <line id="arm-forearm" class="arm-line" x1="160" y1="190" x2="160" y2="110" />
-                      <line id="arm-hand" class="arm-line hand-line" x1="160" y1="110" x2="160" y2="70" />
+                      <rect x="150" y="40" width="20" height="40" rx="8" fill="#0f172a" opacity="0.65" />
+                      <line id="arm-upper" class="arm-line" x1="160" y1="80" x2="160" y2="190" />
+                      <line id="arm-forearm" class="arm-line" x1="160" y1="190" x2="160" y2="300" />
+                      <line id="arm-hand" class="arm-line hand-line" x1="160" y1="300" x2="160" y2="360" />
                       <g id="arm-fingers" class="arm-fingers">
-                        <line id="finger-1" class="finger-line" x1="160" y1="70" x2="160" y2="50" />
-                        <line id="finger-2" class="finger-line" x1="160" y1="70" x2="160" y2="50" />
-                        <line id="finger-3" class="finger-line" x1="160" y1="70" x2="160" y2="50" />
+                        <line id="finger-1" class="finger-line" x1="160" y1="360" x2="160" y2="400" />
+                        <line id="finger-2" class="finger-line" x1="160" y1="360" x2="160" y2="400" />
+                        <line id="finger-3" class="finger-line" x1="160" y1="360" x2="160" y2="400" />
+                        <line id="finger-4" class="finger-line" x1="160" y1="360" x2="160" y2="400" />
+                        <line id="finger-5" class="finger-line" x1="160" y1="360" x2="160" y2="400" />
                       </g>
-                      <circle class="arm-joint" cx="160" cy="300" r="9" />
+                      <circle class="arm-joint" cx="160" cy="80" r="9" />
                       <circle id="joint-elbow-preview" class="arm-joint" cx="160" cy="190" r="7" />
-                      <circle id="joint-wrist-preview" class="arm-joint" cx="160" cy="110" r="6" />
-                      <circle id="hand-effector" class="hand-effector" cx="160" cy="70" r="8" />
+                      <circle id="joint-wrist-preview" class="arm-joint" cx="160" cy="300" r="6" />
+                      <circle id="hand-effector" class="hand-effector" cx="160" cy="360" r="8" />
                     </svg>
                   </div>
                 </div>
