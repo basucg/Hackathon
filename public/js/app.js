@@ -95,9 +95,11 @@ const selectors = {
   handEffector: document.getElementById('hand-effector')
 };
 
-const fingerSegments = ['finger-1', 'finger-2', 'finger-3', 'finger-4', 'finger-5'].map((id) =>
-  document.getElementById(id)
-);
+const fingerSegments = ['finger-1', 'finger-2', 'finger-3', 'finger-4', 'finger-5'].map((prefix) => ({
+  base: document.getElementById(`${prefix}-base`),
+  tip: document.getElementById(`${prefix}-tip`),
+  cap: document.getElementById(`${prefix}-cap`)
+}));
 
 const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
 const DESIGN_MINDS_PATTERN = /^HACK_DESIGNMINDS_\d+$/;
@@ -114,7 +116,8 @@ const ARM_LENGTHS = {
   hand: 70
 };
 const FINGER_BASE_OFFSETS = [-0.35, -0.15, 0, 0.15, 0.35];
-const FINGER_LENGTH = 45;
+const FINGER_BASE_LENGTH = 55;
+const FINGER_TIP_LENGTH = 35;
 const ARM_BASE = { x: 160, y: 80 };
 
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
@@ -245,17 +248,29 @@ const updateArmPreview = () => {
     selectors.handEffector.setAttribute('cy', handPoint.y.toFixed(1));
   }
 
-  const curl = manipulatorState.grip * 0.5;
-  const spreadBase = 0.35 - manipulatorState.grip * 0.2;
+  const curl = manipulatorState.grip * 0.9;
+  const spreadBase = 0.5 - manipulatorState.grip * 0.2;
   fingerSegments.forEach((finger, index) => {
-    if (!finger) return;
+    if (!finger.base || !finger.tip) return;
     const offset = FINGER_BASE_OFFSETS[index] * spreadBase;
-    const fingerAngle = wristRad + offset + curl;
-    const fingerEnd = {
-      x: handPoint.x + Math.sin(fingerAngle) * FINGER_LENGTH,
-      y: handPoint.y - Math.cos(fingerAngle) * FINGER_LENGTH
+    const baseAngle = wristRad + offset;
+    const tipAngle = baseAngle + curl;
+
+    const baseEnd = {
+      x: handPoint.x + Math.sin(baseAngle) * FINGER_BASE_LENGTH,
+      y: handPoint.y - Math.cos(baseAngle) * FINGER_BASE_LENGTH
     };
-    setLine(finger, handPoint, fingerEnd);
+    const tipEnd = {
+      x: baseEnd.x + Math.sin(tipAngle) * FINGER_TIP_LENGTH,
+      y: baseEnd.y - Math.cos(tipAngle) * FINGER_TIP_LENGTH
+    };
+
+    setLine(finger.base, handPoint, baseEnd);
+    setLine(finger.tip, baseEnd, tipEnd);
+    if (finger.cap) {
+      finger.cap.setAttribute('cx', tipEnd.x.toFixed(1));
+      finger.cap.setAttribute('cy', tipEnd.y.toFixed(1));
+    }
   });
 };
 

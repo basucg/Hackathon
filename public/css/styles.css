@@ -451,6 +451,13 @@ p {
   stroke: #f8fafc;
   stroke-width: 4;
   stroke-linecap: round;
+  transition: all 0.2s ease;
+}
+
+.finger-cap {
+  fill: #f8fafc;
+  stroke: #94a3b8;
+  stroke-width: 2;
 }
 
 .mode-buttons {
