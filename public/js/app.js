@@ -118,7 +118,7 @@ const ARM_LENGTHS = {
 const FINGER_BASE_OFFSETS = [-0.35, -0.15, 0, 0.15, 0.35];
 const FINGER_BASE_LENGTH = 55;
 const FINGER_TIP_LENGTH = 35;
-const ARM_BASE = { x: 160, y: 80 };
+const ARM_BASE = { x: 160, y: 100 };
 
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);

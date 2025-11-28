@@ -370,11 +370,11 @@ p {
 }
 
 .arm-stage {
-  border: 1px dashed var(--border);
-  border-radius: 18px;
-  padding: 1.5rem;
-  background: radial-gradient(circle at top, rgba(37, 99, 235, 0.2), transparent 70%);
-  min-height: 320px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 24px;
+  padding: 1rem;
+  background: #061a37;
+  min-height: 360px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,7 +382,7 @@ p {
 
 .arm-stage svg {
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
   height: auto;
 }
 
