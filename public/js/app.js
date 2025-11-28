@@ -53,17 +53,9 @@ const selectors = {
   tasksInput: document.getElementById('tasks-input'),
   uptimeInput: document.getElementById('uptime-input'),
   statusMessage: document.getElementById('status-message'),
-  commandTypeInput: document.getElementById('command-type-input'),
-  commandValueInput: document.getElementById('command-value-input'),
-  commandMetaInput: document.getElementById('command-meta-input'),
-  commandMessage: document.getElementById('command-message'),
-  directionPad: document.querySelector('.direction-pad'),
-  customCommandForm: document.getElementById('custom-command-form'),
   tabButtons: document.querySelectorAll('.tab-button'),
   tabPanels: document.querySelectorAll('[data-tab-panel]'),
   teleopFeed: document.getElementById('teleop-feed'),
-  speedSlider: document.getElementById('speed-slider'),
-  modeButtons: document.querySelectorAll('.mode-buttons button'),
   mapView: document.getElementById('map-view'),
   pathLogList: document.getElementById('path-log-list'),
   velocityChart: document.getElementById('velocity-chart'),
@@ -513,64 +505,6 @@ const sendCommand = async ({ robotId, type, value, metadata }) => {
   return toJSON(response);
 };
 
-const getSelectedSpeed = () => Number(selectors.speedSlider?.value ?? 0);
-
-const handleDirection = async (event) => {
-  const { direction } = event.target.dataset;
-  if (!direction) return;
-  event.preventDefault();
-  const robot = getSelectedRobot();
-  if (!robot) {
-    return setMessage(selectors.commandMessage, 'Select a robot first.', 'error');
-  }
-  try {
-    await sendCommand({
-      robotId: robot.id,
-      type: 'direction',
-      value: direction,
-      metadata: { speed: getSelectedSpeed() }
-    });
-    setMessage(selectors.commandMessage, `Direction command "${direction}" queued.`, 'success');
-    await loadRobots();
-  } catch (error) {
-    setMessage(selectors.commandMessage, error.message, 'error');
-  }
-};
-
-const sendCustomCommand = async (event) => {
-  event.preventDefault();
-  const robot = getSelectedRobot();
-  if (!robot) {
-    return setMessage(selectors.commandMessage, 'Select a robot first.', 'error');
-  }
-  const type = selectors.commandTypeInput.value.trim();
-  const value = selectors.commandValueInput.value.trim();
-  if (!type || !value) {
-    return setMessage(selectors.commandMessage, 'Provide both command type and value.', 'error');
-  }
-  let metadata;
-  try {
-    metadata = parseMetadata(selectors.commandMetaInput.value);
-  } catch (err) {
-    return setMessage(selectors.commandMessage, err.message, 'error');
-  }
-  try {
-    await sendCommand({
-      robotId: robot.id,
-      type,
-      value,
-      metadata: { ...metadata, speed: getSelectedSpeed() }
-    });
-    setMessage(selectors.commandMessage, 'Command dispatched to robot.', 'success');
-    selectors.commandTypeInput.value = '';
-    selectors.commandValueInput.value = '';
-    selectors.commandMetaInput.value = '';
-    await loadRobots();
-  } catch (error) {
-    setMessage(selectors.commandMessage, error.message, 'error');
-  }
-};
-
 const sendManipulatorCommand = async () => {
   const robot = getSelectedRobot();
   if (!robot) {
@@ -586,26 +520,6 @@ const sendManipulatorCommand = async () => {
     setMessage(selectors.manipulatorMessage, 'Joint update dispatched.', 'success');
   } catch (error) {
     setMessage(selectors.manipulatorMessage, error.message, 'error');
-  }
-};
-
-const handleModeChange = async (event) => {
-  const { mode } = event.target.dataset;
-  if (!mode) return;
-  const robot = getSelectedRobot();
-  if (!robot) {
-    return setMessage(selectors.commandMessage, 'Select a robot first.', 'error');
-  }
-  try {
-    await apiFetch(`/api/robots/${robot.id}/mode`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, speed: getSelectedSpeed() })
-    });
-    setMessage(selectors.commandMessage, `Mode "${mode}" acknowledged.`, 'success');
-    await loadRobots();
-  } catch (error) {
-    setMessage(selectors.commandMessage, error.message, 'error');
   }
 };
 
@@ -686,11 +600,8 @@ const handleLogout = async () => {
 
 selectors.refreshButton.addEventListener('click', loadRobots);
 selectors.statusForm.addEventListener('submit', sendStatusUpdate);
-selectors.directionPad?.addEventListener('click', handleDirection);
-selectors.customCommandForm?.addEventListener('submit', sendCustomCommand);
 selectors.loginForm.addEventListener('submit', handleLoginSubmit);
 selectors.logoutButton.addEventListener('click', handleLogout);
-selectors.modeButtons.forEach((button) => button.addEventListener('click', handleModeChange));
 selectors.otaForm.addEventListener('submit', handleOtaSubmit);
 selectors.tabButtons.forEach((button) =>
   button.addEventListener('click', () => setActiveTab(button.dataset.tab))
