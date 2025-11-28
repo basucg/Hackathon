@@ -118,17 +118,29 @@
                   </div>
                   <div class="grid-2">
                     <label>
-                      Online substate
-                      <select id="operation-input">
-                        <option value="">Select substate</option>
+                      Power state
+                      <select id="power-state-input">
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                      </select>
+                    </label>
+                    <label>
+                      Substate
+                      <select id="power-substate-input">
                         <option value="idle">Idle</option>
                         <option value="charging">Charging</option>
                         <option value="work">Work</option>
                       </select>
                     </label>
+                  </div>
+                  <div class="grid-2">
                     <label>
                       Location
                       <input id="location-input" placeholder="Sector C" />
+                    </label>
+                    <label>
+                      Mission
+                      <input id="mission-input" placeholder="Inspection Loop" />
                     </label>
                   </div>
                   <label>

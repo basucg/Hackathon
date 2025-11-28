@@ -2,23 +2,66 @@ const db = require('../db/client');
 const { generateId } = require('../utils/id');
 const firmwareRepo = require('./firmwareRepository');
 
+const HACK_PREFIX = 'HACK_';
+const HACK_MIN = 1;
+const HACK_MAX = 10000;
+let hackSequence = HACK_MIN;
+
+const clampHackNumber = (value) => Math.min(Math.max(value, HACK_MIN), HACK_MAX);
+const parseHackNumber = (value = '') => {
+  const match = /^HACK_(\d{1,5})$/i.exec(value);
+  if (!match) {
+    return null;
+  }
+  return clampHackNumber(Number(match[1]));
+};
+
+const nextHackNumber = () => {
+  const current = hackSequence;
+  hackSequence = hackSequence >= HACK_MAX ? HACK_MIN : hackSequence + 1;
+  return current;
+};
+
+const advanceHackSequence = (usedNumber) => {
+  if (typeof usedNumber !== 'number') return;
+  const clamped = clampHackNumber(usedNumber);
+  if (clamped >= hackSequence) {
+    hackSequence = clamped + 1;
+    if (hackSequence > HACK_MAX) {
+      hackSequence = HACK_MIN;
+    }
+  }
+};
+
+const deriveHackIdentity = (value, fallbackNumber) => {
+  const parsed = parseHackNumber(value);
+  const number = parsed ?? clampHackNumber(fallbackNumber ?? nextHackNumber());
+  advanceHackSequence(number);
+  return {
+    number,
+    identifier: `${HACK_PREFIX}${number}`
+  };
+};
+
 const defaultRobots = [
   {
-    name: 'Atlas-01',
+    hackNumber: 1,
+    status: 'online',
+    subStatus: 'idle',
     model: 'Atlas Heavy',
     batteryLevel: 82,
-    operationStatus: 'idle',
     temperatureC: 32,
     signalStrength: 94,
     location: 'Charging Dock',
-    mission: 'On-Call Maintenance',
+    mission: 'Routine Maintenance',
     metrics: { tasksCompleted: 128, uptimeHours: 413 }
   },
   {
-    name: 'Scout-17',
+    hackNumber: 2,
+    status: 'online',
+    subStatus: 'work',
     model: 'Scout Rover',
     batteryLevel: 57,
-    operationStatus: 'patrolling',
     temperatureC: 28,
     signalStrength: 88,
     location: 'Sector C',
@@ -26,12 +69,13 @@ const defaultRobots = [
     metrics: { tasksCompleted: 64, uptimeHours: 189 }
   },
   {
-    name: 'Lifter-03',
+    hackNumber: 3,
+    status: 'offline',
+    subStatus: 'shutdown',
     model: 'Payload Lifter',
     batteryLevel: 36,
-    operationStatus: 'loading',
     temperatureC: 41,
-    signalStrength: 72,
+    signalStrength: 12,
     location: 'Warehouse Bay',
     mission: 'Cargo Transfer',
     metrics: { tasksCompleted: 342, uptimeHours: 1032 }
@@ -44,9 +88,12 @@ const robotRowToEntity = (row) => {
   return {
     id: row.id,
     name: row.name,
+    identifier: row.identifier,
     model: row.model,
     batteryLevel: row.batteryLevel,
     operationStatus: row.operationStatus,
+    status: row.status || 'online',
+    subStatus: row.subStatus || row.operationStatus || 'idle',
     temperatureC: row.temperatureC,
     signalStrength: row.signalStrength,
     location: row.location,
@@ -71,8 +118,8 @@ const commandRowToEntity = (row) => ({
 });
 
 const insertRobotStmt = db.prepare(`
-INSERT INTO robots (id, name, model, batteryLevel, operationStatus, temperatureC, signalStrength, location, mission, lastHeartbeat, tasksCompleted, uptimeHours, notes)
-VALUES (@id, @name, @model, @batteryLevel, @operationStatus, @temperatureC, @signalStrength, @location, @mission, @lastHeartbeat, @tasksCompleted, @uptimeHours, @notes)
+INSERT INTO robots (id, name, identifier, status, subStatus, model, batteryLevel, operationStatus, temperatureC, signalStrength, location, mission, lastHeartbeat, tasksCompleted, uptimeHours, notes)
+VALUES (@id, @name, @identifier, @status, @subStatus, @model, @batteryLevel, @operationStatus, @temperatureC, @signalStrength, @location, @mission, @lastHeartbeat, @tasksCompleted, @uptimeHours, @notes)
 `);
 
 const updateRobotStmt = (setClause) =>
@@ -112,21 +159,29 @@ const attachCommands = (robot) => {
   };
 };
 
-const buildRobotRecord = (payload) => ({
-  id: payload.id ?? generateId(12),
-  name: payload.name,
-  model: payload.model ?? 'Generic',
-  batteryLevel: payload.batteryLevel ?? 100,
-  operationStatus: payload.operationStatus ?? 'idle',
-  temperatureC: payload.temperatureC ?? 25,
-  signalStrength: payload.signalStrength ?? 100,
-  location: payload.location ?? 'Dock',
-  mission: payload.mission ?? 'Standby',
-  lastHeartbeat: payload.lastHeartbeat ?? new Date().toISOString(),
-  tasksCompleted: payload.metrics?.tasksCompleted ?? payload.tasksCompleted ?? 0,
-  uptimeHours: payload.metrics?.uptimeHours ?? payload.uptimeHours ?? 0,
-  notes: payload.notes ?? 'New robot onboarded'
-});
+const buildRobotRecord = (payload = {}) => {
+  const derived = deriveHackIdentity(payload.name ?? payload.identifier, payload.hackNumber);
+  const resolvedSubStatus = payload.subStatus ?? payload.operationStatus ?? 'idle';
+  const resolvedStatus = payload.status ?? (OFFLINE_SUBSTATE_SET.has(resolvedSubStatus) ? 'offline' : 'online');
+  return {
+    id: payload.id ?? generateId(12),
+    name: derived.identifier,
+    identifier: derived.identifier,
+    status: resolvedStatus,
+    subStatus: resolvedSubStatus,
+    model: payload.model ?? 'Generic',
+    batteryLevel: payload.batteryLevel ?? 100,
+    operationStatus: resolvedSubStatus,
+    temperatureC: payload.temperatureC ?? 25,
+    signalStrength: payload.signalStrength ?? 100,
+    location: payload.location ?? 'Dock',
+    mission: payload.mission ?? 'Standby',
+    lastHeartbeat: payload.lastHeartbeat ?? new Date().toISOString(),
+    tasksCompleted: payload.metrics?.tasksCompleted ?? payload.tasksCompleted ?? 0,
+    uptimeHours: payload.metrics?.uptimeHours ?? payload.uptimeHours ?? 0,
+    notes: payload.notes ?? 'New robot onboarded'
+  };
+};
 
 const listRobots = () => {
   seedIfEmpty();
@@ -148,7 +203,7 @@ const createRobot = (payload) => {
   return getRobotById(record.id);
 };
 
-const updateRobotStatus = (id, statusPayload) => {
+const updateRobotStatus = (id, statusPayload = {}) => {
   const updates = [];
   const params = { id };
 
@@ -156,9 +211,18 @@ const updateRobotStatus = (id, statusPayload) => {
     updates.push('batteryLevel = @batteryLevel');
     params.batteryLevel = statusPayload.batteryLevel;
   }
-  if (statusPayload.operationStatus) {
+  if (statusPayload.status) {
+    updates.push('status = @status');
+    params.status = statusPayload.status;
+  }
+  if (statusPayload.subStatus) {
+    updates.push('subStatus = @subStatus');
+    params.subStatus = statusPayload.subStatus;
+  }
+  const nextOperationStatus = statusPayload.operationStatus || statusPayload.subStatus;
+  if (nextOperationStatus) {
     updates.push('operationStatus = @operationStatus');
-    params.operationStatus = statusPayload.operationStatus;
+    params.operationStatus = nextOperationStatus;
   }
   if (statusPayload.temperatureC !== undefined) {
     updates.push('temperatureC = @temperatureC');

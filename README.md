@@ -3,17 +3,17 @@
 Operational dashboard and JSON API for tracking robot telemetry, sending manual status updates, and dispatching directional commands.
 
 ## Features
-- REST API to read the fleet, patch robot telemetry, stream insights, and queue commands (direction, mode, OTA, etc.)
-- SQLite-backed robot registry with seeded demo bots (Atlas, Scout, Lifter) persisted to `data/robots.db`
+- REST API to read the fleet, patch robot telemetry, stream insights, and queue manipulator/OTA commands
+- SQLite-backed robot registry with seeded `HACK_<n>` units (IDs 1–10000) persisted to `data/robots.db`
+- Explicit online/offline power state with idle/charging/work + shutdown/power disconnect substates
 - Firmware history tracking for every robot (10k+ ready) with OTA progress logs and version rollups
 - Secure login gate with session tokens so only approved operators can access controls
 - Live cloud console tabs:
-  - **Overview** – status uplink, command log, telemetry stats
-  - **Teleop** – camera feed placeholder, joystick pad, mode/speed controls, custom commands
+  - **Overview** – status uplink, power-state override, command log, telemetry stats
+  - **Teleop** – configure shoulder/elbow/wrist angles, view five-finger industrial hand, trigger grip hold/release
   - **Map & Path** – Leaflet map with trail + geofence overlay, velocity/acceleration charts (Chart.js)
   - **Health** – motor/CPU/battery indicators, diagnostics, alert log
   - **OTA Update** – firmware metadata, upload simulator, progress log
-- Direction pad, command panel, and messaging surface to send mode changes or OTA triggers
 
 ## Getting started
 ```bash
@@ -44,17 +44,11 @@ curl -X PUT http://localhost:3000/api/robots/ROBOT_ID/status \
   -H "Content-Type: application/json" \
   -d '{
     "batteryLevel": 91,
-    "operationStatus": "patrolling",
+    "status": "offline",
+    "subStatus": "power_disconnect",
     "location": "Sector 7",
     "metrics": { "tasksCompleted": 142, "uptimeHours": 512 }
   }'
-```
-
-### Sample: send direction command
-```bash
-curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
-  -H "Content-Type: application/json" \
-  -d '{ "type": "direction", "value": "north" }'
 ```
 
 ## Data storage
@@ -63,17 +57,17 @@ curl -X POST http://localhost:3000/api/robots/ROBOT_ID/commands \
 - Use any SQLite browser to inspect the tables (`robots`, `robot_commands`, `robot_firmware_history`) if you need direct access.
 
 ## Authentication
-- Default credentials: `robot-admin` / `robotops` (change by updating the seed logic in `src/repositories/authRepository.js`).
+- Default credentials: `hackathon` / `hackathon` (override via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars).
 - Sessions are issued as bearer tokens stored in SQLite; the frontend keeps the token in `localStorage` and includes it on every API call.
 - Use the **Logout** button or delete `localStorage.rebotToken` to end a session; tokens also become invalid if removed from the `sessions` table.
 
 ## Frontend workflow
-1. Sign in (`robot-admin` / `robotops`) to unlock the console. Tokens persist in `localStorage`.
+1. Sign in (`hackathon` / `hackathon`) to unlock the console. Tokens persist in `localStorage`.
 2. Hit **Refresh Telemetry** to pull the latest API response.
-3. Click any robot card to load its multi-tab detail view.
+3. Click any `HACK_<n>` robot card to load its multi-tab detail view.
 4. Tabs:
-   - **Overview** – push manual readings, inspect recent commands.
-   - **Teleop** – drive with the pad, tweak speed, change modes, watch the simulated feed.
+   - **Overview** – push manual readings, set power state/substate, inspect recent commands.
+   - **Teleop** – tune joints, watch the five-finger hand preview, send grip hold/release commands.
    - **Map & Path** – explore location trails, geofence overlays, velocity/acc charts.
    - **Health** – monitor motor temp, CPU load, battery cycles, faults.
    - **OTA Update** – enter a version + file, optionally simulate failures, watch the progress bar + step log, and review firmware history.

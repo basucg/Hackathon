@@ -47,7 +47,6 @@ const selectors = {
   statusForm: document.getElementById('status-form'),
   batteryInput: document.getElementById('battery-input'),
   signalInput: document.getElementById('signal-input'),
-  operationInput: document.getElementById('operation-input'),
   locationInput: document.getElementById('location-input'),
   notesInput: document.getElementById('notes-input'),
   tasksInput: document.getElementById('tasks-input'),
@@ -101,9 +100,6 @@ const fingerSegments = ['finger-1', 'finger-2', 'finger-3', 'finger-4', 'finger-
   cap: document.getElementById(`${prefix}-cap`)
 }));
 
-const DESIGN_MINDS_PREFIX = 'HACK_DESIGNMINDS_';
-const DESIGN_MINDS_PATTERN = /^HACK_DESIGNMINDS_\d+$/;
-const ONLINE_SUBSTATES = new Set(['idle', 'charging', 'work']);
 const manipulatorState = {
   shoulder: 45,
   elbow: 60,
@@ -123,35 +119,50 @@ const ARM_BASE = { x: 160, y: 100 };
 const capitalize = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const ensureDesignMindsId = (robot, index) => {
-  const providedId = [robot.designMindsId, robot.uniqueId].find(
-    (candidate) => typeof candidate === 'string' && DESIGN_MINDS_PATTERN.test(candidate)
-  );
-  if (providedId) {
-    return providedId;
+const HACK_PREFIX = 'HACK_';
+const HACK_PATTERN = /^HACK_(\d{1,5})$/;
+const HACK_MIN = 1;
+const HACK_MAX = 10000;
+const ONLINE_SUBSTATE_OPTIONS = [
+  { value: 'idle', label: 'Idle' },
+  { value: 'charging', label: 'Charging' },
+  { value: 'work', label: 'Work' }
+];
+const OFFLINE_SUBSTATE_OPTIONS = [
+  { value: 'shutdown', label: 'Shutdown' },
+  { value: 'power_disconnect', label: 'Power Disconnect' }
+];
+const ONLINE_SUBSTATE_SET = new Set(ONLINE_SUBSTATE_OPTIONS.map((option) => option.value));
+const OFFLINE_SUBSTATE_SET = new Set(OFFLINE_SUBSTATE_OPTIONS.map((option) => option.value));
+
+const parseHackNumber = (value = '') => {
+  const match = HACK_PATTERN.exec(value);
+  if (!match) {
+    return null;
   }
-  const derivedNumber =
-    typeof robot.id === 'string' && robot.id.match(/\d+/)?.[0] ? robot.id.match(/\d+/)[0] : index + 1;
-  return `${DESIGN_MINDS_PREFIX}${derivedNumber}`;
+  return clamp(Number(match[1]), HACK_MIN, HACK_MAX);
 };
 
-const normalizeRobot = (robot, index) => ({
-  ...robot,
-  designMindsId: ensureDesignMindsId(robot, index)
-});
-
-const normalizeSubstate = (status = '') => {
-  const lower = status.toLowerCase();
-  return ONLINE_SUBSTATES.has(lower) ? lower : 'idle';
+const ensureHackName = (robot, index = 0) => {
+  const sources = [robot?.name, robot?.identifier, robot?.hackName];
+  for (const source of sources) {
+    const parsed = parseHackNumber(source);
+    if (parsed !== null) {
+      return `${HACK_PREFIX}${parsed}`;
+    }
+  }
+  return `${HACK_PREFIX}${clamp(index + 1, HACK_MIN, HACK_MAX)}`;
 };
 
-const deriveConnectivity = (robot) => {
-  const isOnline = (robot.signalStrength ?? 0) > 40 && (robot.batteryLevel ?? 0) > 15;
-  return {
-    isOnline,
-    substate: isOnline ? normalizeSubstate(robot.operationStatus) : null
-  };
+const formatSubstateLabel = (value) => {
+  if (!value) return '—';
+  return value
+    .split('_')
+    .map((segment) => capitalize(segment))
+    .join(' ');
 };
+
+const getSubstateOptions = (status) => (status === 'offline' ? OFFLINE_SUBSTATE_OPTIONS : ONLINE_SUBSTATE_OPTIONS);
 
 const formatCoordinates = (location) =>
   location?.lat !== undefined && location?.lng !== undefined
@@ -187,9 +198,14 @@ const buildStatsRows = (stats) => {
 
 const renderOverviewStats = (robot) => {
   if (!robot) return;
+  const connectivity = deriveConnectivity(robot);
+  const statusSummary = `${connectivity.isOnline ? 'Online' : 'Offline'} · ${formatSubstateLabel(
+    connectivity.substate
+  )}`;
   const insightData = state.insights[robot.id] || {};
   const telemetryTime = insightData.telemetry?.timestamp || robot.lastHeartbeat;
   const stats = [
+    { label: 'Status', value: statusSummary },
     { label: 'Battery', value: formatPercent(robot.batteryLevel) },
     { label: 'Location coordinates', value: formatCoordinates(robot.insightsLocation) },
     { label: 'Heartbeat', value: formatHeartbeat(robot.lastHeartbeat) },
@@ -385,14 +401,14 @@ const renderFleetList = () => {
 
     const meta = document.createElement('div');
     meta.className = 'fleet-meta';
-    meta.innerHTML = `<strong>${robot.name}</strong><span class="robot-id">${robot.designMindsId}</span>`;
+    meta.innerHTML = `<strong>${robot.hackName || robot.name}</strong><span class="robot-id">${robot.model || 'Multi-role'}</span>`;
 
     const status = document.createElement('div');
     const connectivity = deriveConnectivity(robot);
     status.className = `fleet-status ${connectivity.isOnline ? 'status-online' : 'status-offline'}`;
-    const statusLabel = connectivity.isOnline
-      ? `Online · ${capitalize(connectivity.substate)}`
-      : 'Offline';
+    const statusLabel = `${connectivity.isOnline ? 'Online' : 'Offline'} · ${formatSubstateLabel(
+      connectivity.substate
+    )}`;
     status.innerHTML = `<span class="status-dot"></span>${statusLabel}`;
 
     const readings = document.createElement('div');
@@ -431,15 +447,16 @@ const renderDetail = () => {
 
   selectors.detailName.textContent = robot.name;
   if (selectors.detailUniqueId) {
-    selectors.detailUniqueId.textContent = robot.designMindsId;
+    selectors.detailUniqueId.textContent = robot.hackName || robot.name;
   }
   const connectivity = deriveConnectivity(robot);
-  const detailStatusLabel = connectivity.isOnline
-    ? `Online — ${capitalize(connectivity.substate)}`
-    : 'Offline';
+  const detailStatusLabel = `${connectivity.isOnline ? 'Online' : 'Offline'} — ${formatSubstateLabel(
+    connectivity.substate
+  )}`;
   selectors.detailStatus.textContent = detailStatusLabel;
   selectors.detailStatus.classList.toggle('status-online', connectivity.isOnline);
   selectors.detailStatus.classList.toggle('status-offline', !connectivity.isOnline);
+  syncPowerInputs(robot);
 
   renderOverviewStats(robot);
 
@@ -499,16 +516,31 @@ const loadInsightsForRobot = async (robotId) => {
 
 const collectStatusPayload = () => {
   const payload = {};
-  const { batteryInput, signalInput, operationInput, locationInput, notesInput, tasksInput, uptimeInput } = selectors;
-  if (batteryInput.value) payload.batteryLevel = Number(batteryInput.value);
-  if (signalInput.value) payload.signalStrength = Number(signalInput.value);
-  if (operationInput.value) payload.operationStatus = operationInput.value;
-  if (locationInput.value) payload.location = locationInput.value;
-  if (notesInput.value) payload.notes = notesInput.value;
+  const {
+    batteryInput,
+    signalInput,
+    powerStateInput,
+    powerSubstateInput,
+    locationInput,
+    missionInput,
+    notesInput,
+    tasksInput,
+    uptimeInput
+  } = selectors;
+  if (batteryInput?.value) payload.batteryLevel = Number(batteryInput.value);
+  if (signalInput?.value) payload.signalStrength = Number(signalInput.value);
+  if (powerStateInput?.value) payload.status = powerStateInput.value;
+  if (powerSubstateInput?.value) {
+    payload.subStatus = powerSubstateInput.value;
+    payload.operationStatus = powerSubstateInput.value;
+  }
+  if (locationInput?.value) payload.location = locationInput.value;
+  if (missionInput?.value) payload.mission = missionInput.value;
+  if (notesInput?.value) payload.notes = notesInput.value;
 
   const metrics = {};
-  if (tasksInput.value) metrics.tasksCompleted = Number(tasksInput.value);
-  if (uptimeInput.value) metrics.uptimeHours = Number(uptimeInput.value);
+  if (tasksInput?.value) metrics.tasksCompleted = Number(tasksInput.value);
+  if (uptimeInput?.value) metrics.uptimeHours = Number(uptimeInput.value);
   if (Object.keys(metrics).length) {
     payload.metrics = metrics;
   }

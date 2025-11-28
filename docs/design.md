@@ -1,7 +1,7 @@
 # Robot Management Console – Design Document
 
 ## 1. Context
-The Robot Management Console is a full-stack web application that lets authorized operators monitor and teleoperate a fleet of robots. The system exposes a JSON REST API backed by a SQLite store and renders a single-page UI with fleet overview, detail tabs, and control surfaces (teleop, OTA, health, map). Recent work re-scoped the fleet to DesignMinds robots (`HACK_DESIGNMINDS_<n>`) and added a manipulator control surface for shoulder/elbow/wrist joints with a live SVG preview.
+The Robot Management Console is a full-stack web application that lets authorized operators monitor and teleoperate a fleet of robots. The system exposes a JSON REST API backed by a SQLite store and renders a single-page UI with fleet overview, detail tabs, and control surfaces (teleop, OTA, health, map). Latest work standardizes names to `HACK_<n>` (1–10000), adds explicit power-state modeling (online/offline with substates), and introduces a five-finger industrial manipulator preview.
 
 ## 2. Goals & Success Criteria
 - Provide a cohesive operator experience for discovering robots, inspecting telemetry, and issuing commands (drive, mode, OTA, manipulator).
@@ -59,7 +59,7 @@ The Robot Management Console is a full-stack web application that lets authorize
    - Frontend stores token in `localStorage` and toggles to app view.
 2. **Telemetry Refresh**
    - User clicks Refresh → `loadRobots()` calls `/api/robots`.
-   - Response deserialized, normalized (DesignMinds IDs), state updated, UI rerendered.
+   - Response deserialized, normalized to `HACK_<n>` naming, power state fields applied, state updated, UI rerendered.
 3. **Manipulator Update**
    - User drags sliders (shoulder/elbow/wrist).
    - `manipulatorState` updates + preview re-renders instantly.
@@ -73,20 +73,20 @@ The Robot Management Console is a full-stack web application that lets authorize
 | Decision | Rationale |
 | --- | --- |
 | Keep SQLite with synchronous better-sqlite3 | Simplicity, zero external dependency, fast dev iteration. |
-| Derive `HACK_DESIGNMINDS_<n>` IDs client-side | Guarantees naming consistency without DB migration; still stored in derived `designMindsId`. |
+| Derive `HACK_<n>` IDs client-side | Guarantees naming consistency without DB migration; still stored alongside `identifier`. |
 | SVG-based manipulator preview | Lightweight, no extra canvas/lib dependencies; easy to animate via DOM updates. |
 | REST-only updates | Avoids websockets complexity; polling fits hackathon scope. |
 | Single bundle JS | Minimal tooling; script served as ES module from `/public/js/app.js`. |
 
 ## 7. UI/UX Specification
-- **Fleet List**: badge shows availability (“Online · Idle”, “Offline”), metadata displays `robot.name` + `designMindsId`.
-- **Detail Header**: subtitle dedicated to DesignMinds ID, status badge reuses online/offline palette.
-- **Overview Stats Grid**: 2-row layout (headers row + data row) for [Battery, Coordinates, Heartbeat, Location, Time, Uptime, Temperature].
-- **Teleop Tab**: Two-column grid – left video feed, center command panel, right manipulator card. Responsive stacking below 960px.
+- **Fleet List**: badge shows availability (“Online · Idle”, “Offline · Shutdown”), metadata displays `HACK_<n>` name + model.
+- **Detail Header**: subtitle shows `HACK_<n>` while status badge reflects power state + substate.
+- **Overview Stats Grid**: 2-row layout (headers row + data row) for [Status, Battery, Coordinates, Heartbeat, Location, Time, Uptime, Temperature].
+- **Teleop Tab**: Two-column grid – left joint/grip controls, right industrial five-finger SVG hand on high-contrast backdrop. Responsive stacking below 960px.
 - **Manipulator Card**:
-  - Range sliders with degree readouts.
+  - Range sliders with degree readouts (shoulder/elbow/wrist) plus grip hold/release buttons.
   - CTA button and status text (success/error classes shared with other forms).
-  - Arm preview sized to fit panel using `viewBox` 240×240.
+  - Arm preview sized via `viewBox` 400×480 showing full arm and five foldable fingers.
 
 ## 8. API Contracts (excerpt)
 | Endpoint | Method | Request | Response |
@@ -133,7 +133,7 @@ sessions(token, userId FK, createdAt)
 
 ## 14. Future Work
 - Add WebSocket push for telemetry and manipulator feedback.
-- Persist DesignMinds identifier server-side and expose via API.
-- Support gripper articulation / finger positions beyond wrist rotation.
+- Push power-state events to downstream systems (energy dashboards, shutdown orchestration).
+- Support per-finger force sensors once hardware is available.
 - Integrate real video feed & sensors if hardware available.
 - Internationalization of UI labels and measurement units.
