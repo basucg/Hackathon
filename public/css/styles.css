@@ -537,6 +537,12 @@ p {
   margin-top: 0.5rem;
 }
 
+.fallback-map {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .path-log {
   border: 1px solid var(--border);
   border-radius: 16px;

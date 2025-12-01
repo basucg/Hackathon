@@ -470,6 +470,52 @@ const formatPathPointLabel = (point) => {
   return point.label ? `${point.label} · ${coords}` : coords;
 };
 
+const buildFallbackMapSvg = (path, center, geofences = []) => {
+  const width = 420;
+  const height = 280;
+  const padding = 24;
+  const lats = path.map((pt) => pt.lat);
+  const lngs = path.map((pt) => pt.lng);
+  const minLat = Math.min(...lats, center.lat);
+  const maxLat = Math.max(...lats, center.lat);
+  const minLng = Math.min(...lngs, center.lng);
+  const maxLng = Math.max(...lngs, center.lng);
+  const latSpan = Math.max(maxLat - minLat, 0.01);
+  const lngSpan = Math.max(maxLng - minLng, 0.01);
+  const project = (pt) => ({
+    x: padding + ((pt.lng - minLng) / lngSpan) * (width - padding * 2),
+    y: padding + ((maxLat - pt.lat) / latSpan) * (height - padding * 2)
+  });
+  const polyline = path.map((pt) => {
+    const { x, y } = project(pt);
+    return `${x},${y}`;
+  });
+  const centerPoint = project(center);
+  const geofenceCircle = geofences?.length
+    ? (() => {
+        const radiusMeters = geofences[0].radius ?? BANGALORE_DEFAULT_GEOFENCE_RADIUS;
+        const metersPerDegreeLat = 111320;
+        const radiusLat = radiusMeters / metersPerDegreeLat;
+        const radiusSvg = ((radiusLat / latSpan) * (height - padding * 2)) || 12;
+        return `<circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="${radiusSvg}" fill="rgba(247,37,133,0.12)" stroke="#f72585" stroke-width="1" />`;
+      })()
+    : '';
+  return `
+    <svg class="fallback-map" viewBox="0 0 ${width} ${height}" role="img" aria-label="Fallback navigation path">
+      <defs>
+        <linearGradient id="fallbackMapBg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0f172a" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#1e293b" stop-opacity="0.9"/>
+        </linearGradient>
+      </defs>
+      <rect width="${width}" height="${height}" rx="18" fill="url(#fallbackMapBg)" stroke="rgba(148,163,184,0.4)"/>
+      <polyline points="${polyline.join(' ')}" fill="none" stroke="#4cc9f0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      ${geofenceCircle}
+      <circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="6" fill="#f72585" stroke="#fff" stroke-width="2"/>
+    </svg>
+  `;
+};
+
 const ensureMapDefaultsForRobot = (robot) => {
   if (!robot) return null;
   const insights = state.insights[robot.id] ?? {};
@@ -1152,41 +1198,45 @@ const renderMapPanel = (insights) => {
   const path = ensurePathPoints(insights.map.path);
   const lastKnownLocation = insights.map.lastKnownLocation || path[path.length - 1];
   const geofences = insights.map.geofences;
-  if (selectors.mapView && window.L) {
-    if (!mapState.map) {
-      mapState.map = window.L.map('map-view');
-      mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
-      }).addTo(mapState.map);
-    }
-    mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
-    if (mapState.pathLayer) {
-      mapState.map.removeLayer(mapState.pathLayer);
-    }
-    mapState.pathLayer = window.L.polyline(
-      path.map((point) => [point.lat, point.lng]),
-      { color: '#4cc9f0' }
-    ).addTo(mapState.map);
+  if (selectors.mapView) {
+    if (window.L) {
+      if (!mapState.map) {
+        mapState.map = window.L.map('map-view');
+        mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(mapState.map);
+      }
+      mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
+      if (mapState.pathLayer) {
+        mapState.map.removeLayer(mapState.pathLayer);
+      }
+      mapState.pathLayer = window.L.polyline(
+        path.map((point) => [point.lat, point.lng]),
+        { color: '#4cc9f0' }
+      ).addTo(mapState.map);
 
-    if (mapState.marker) {
-      mapState.map.removeLayer(mapState.marker);
-    }
-    mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
+      if (mapState.marker) {
+        mapState.map.removeLayer(mapState.marker);
+      }
+      mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
 
-    if (mapState.geofenceLayer) {
-      mapState.map.removeLayer(mapState.geofenceLayer);
-    }
-    if (geofences?.length) {
-      const fence = geofences[0];
-      mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
-        radius: fence.radius,
-        color: '#f72585',
-        fillOpacity: 0.08
-      }).addTo(mapState.map);
-    }
+      if (mapState.geofenceLayer) {
+        mapState.map.removeLayer(mapState.geofenceLayer);
+      }
+      if (geofences?.length) {
+        const fence = geofences[0];
+        mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
+          radius: fence.radius,
+          color: '#f72585',
+          fillOpacity: 0.08
+        }).addTo(mapState.map);
+      }
 
-    setTimeout(() => mapState.map.invalidateSize(), 250);
+      setTimeout(() => mapState.map.invalidateSize(), 250);
+    } else {
+      selectors.mapView.innerHTML = buildFallbackMapSvg(path, lastKnownLocation, geofences);
+    }
   }
 
   if (selectors.pathLogList) {
