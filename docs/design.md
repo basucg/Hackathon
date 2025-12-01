@@ -283,3 +283,41 @@ flowchart TB
     APIClient --> ExternalAPI[(REST API)]
     ExternalAPI --> State
 ```
+
+## 20. Simulation Strategy
+### 20.1 Goals
+- Validate UI and API changes without relying on physical robots.
+- Exercise fallback behaviors (Bengaluru telemetry, health defaults) in controlled scenarios.
+- Ensure manipulator/command payloads, map traces, and OTA flows behave under latency, failure, and malformed data.
+
+### 20.2 Simulation Layers
+| Layer | Purpose | Tooling / Approach |
+| --- | --- | --- |
+| Backend seed data | Provide deterministic fleet/insight payloads (status, health, OTA) | Existing `generateMockFleet`, scenario-specific JSON fixtures |
+| API contract mocks | Simulate REST endpoints with latency/failure injection | Mock Service Worker (MSW), json-server, or Express stub |
+| Manipulator model | Validate joint/grip commands end-to-end | Lightweight JS class or ROS/Gazebo arm emulator |
+| Map/telemetry replay | Reproduce geofence/path behavior with recorded traces | Static geojson/CSV logs replayed via mock `/insights` |
+| Frontend automation | UI regression on login, tabs, forms, fallback states | Playwright/Cypress hitting mocked API |
+| Chaos testing | Randomized HTTP errors/timeouts to confirm fallback fleet & messaging | Middleware that injects 5xx, malformed JSON, or throttling |
+
+### 20.3 Key Test Cases
+1. **Login + fallback**: Mock `/api/robots` to return 500 → console seeds demo fleet, badge shows “demo robots ready”, selector works, map displays five-point Bangalore path.
+2. **Insights omission**: `/api/robots/:id/insights` responds without `health` field → UI injects 48 °C / 36 % / 512 defaults and diagnostics.
+3. **Manipulator command**: Mock `POST /commands` to echo payload; verify slider/grip updates serialize correctly and command log shows joint metadata.
+4. **OTA success/failure**: Mock `/ota` to return success log once, failure log another time; check progress bar color (normal vs. failure) and history list.
+5. **Map replay**: Feed recorded coordinates (e.g., Whitefield loop) via mock insights; ensure Leaflet path matches dataset and path log entries list newest first.
+6. **Theme & form persistence**: Simulate toggling dark mode, filling status form, submitting, and verifying disabled states/spinner behavior.
+7. **Token expiry**: Mock 401 on any endpoint to confirm `forceLogout` clears localStorage and shows login message.
+
+### 20.4 Execution Workflow
+1. **Unit mocks** – Run JS unit tests with injected fixture data for `normalizeRobot`, `ensureMapDefaultsForRobot`, and health defaults.
+2. **Mock server** – Start MSW/Express stub with scenario routes; drive Playwright specs covering each tab and fallback case.
+3. **Telemetry replay** – Use CLI script to serve recorded GPS/time-series data into mock `/insights`, observe UI updates.
+4. **Chaos run** – Enable middleware that randomly drops requests (p=0.2) to validate resilience.
+5. **Hardware-in-loop (optional)** – Mirror a single dev robot’s traffic through the mock server to compare real vs. simulated responses without breaking UI assumptions.
+
+### 20.5 Acceptance Criteria
+- Every regression run exercises both real API (when available) and mock scenarios.
+- Fallback fleet renders identically across browsers when upstream API is down.
+- Health defaults, map paths, and OTA progress remain stable under simulated faults.
+- Manipulator/command interactions produce the same payloads in simulated and real environments (verified via snapshot tests or payload diffing).
