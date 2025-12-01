@@ -1235,7 +1235,6 @@ const renderMapPanel = (insights) => {
           attribution: '&copy; OpenStreetMap'
         }).addTo(mapState.map);
       }
-      mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
       if (mapState.pathLayer) {
         mapState.map.removeLayer(mapState.pathLayer);
       }
@@ -1243,6 +1242,8 @@ const renderMapPanel = (insights) => {
         path.map((point) => [point.lat, point.lng]),
         { color: '#4cc9f0' }
       ).addTo(mapState.map);
+      const bounds = window.L.latLngBounds(path.map((point) => [point.lat, point.lng]));
+      mapState.map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 });
 
       if (mapState.marker) {
         mapState.map.removeLayer(mapState.marker);
