@@ -166,14 +166,47 @@ const MOCK_COMMAND_VALUES = {
 };
 const BANGALORE_BASE = { lat: 12.9716, lng: 77.5946 };
 const BANGALORE_DEFAULT_PATH_POINTS = [
+  { lat: 12.9776, lng: 77.5993 }, // Cubbon Park
   { lat: 12.9716, lng: 77.5946 }, // MG Road
-  { lat: 12.9352, lng: 77.6245 } // Koramangala
+  { lat: 12.9352, lng: 77.6245 }, // Koramangala
+  { lat: 12.9836, lng: 77.7278 }, // Whitefield
+  { lat: 13.0285, lng: 77.5417 } // Yeshwanthpur
 ];
 const BANGALORE_DEFAULT_GEOFENCE_RADIUS = 260;
+const DEFAULT_HEALTH_TEMPLATE = {
+  motorTemp: 48,
+  cpuUsage: 36,
+  batteryCycles: 512,
+  diagnostics: [
+    { name: 'Manipulator torque', status: 'ok' },
+    { name: 'Power bus', status: 'ok' },
+    { name: 'Vision system', status: 'ok' }
+  ],
+  alerts: []
+};
 
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const randomItem = (array = []) => array[randomInt(0, Math.max(array.length - 1, 0))];
 const generateMockId = (index) => `mock-${index}-${Math.random().toString(16).slice(2, 8)}`;
+
+const cloneDefaultHealth = () => ({
+  motorTemp: DEFAULT_HEALTH_TEMPLATE.motorTemp,
+  cpuUsage: DEFAULT_HEALTH_TEMPLATE.cpuUsage,
+  batteryCycles: DEFAULT_HEALTH_TEMPLATE.batteryCycles,
+  diagnostics: DEFAULT_HEALTH_TEMPLATE.diagnostics.map((diag) => ({ ...diag })),
+  alerts: [...DEFAULT_HEALTH_TEMPLATE.alerts]
+});
+
+const withHealthDefaults = (health = {}) => ({
+  motorTemp: health.motorTemp ?? DEFAULT_HEALTH_TEMPLATE.motorTemp,
+  cpuUsage: health.cpuUsage ?? DEFAULT_HEALTH_TEMPLATE.cpuUsage,
+  batteryCycles: health.batteryCycles ?? DEFAULT_HEALTH_TEMPLATE.batteryCycles,
+  diagnostics:
+    Array.isArray(health.diagnostics) && health.diagnostics.length
+      ? health.diagnostics
+      : DEFAULT_HEALTH_TEMPLATE.diagnostics.map((diag) => ({ ...diag })),
+  alerts: Array.isArray(health.alerts) ? health.alerts : [...DEFAULT_HEALTH_TEMPLATE.alerts]
+});
 
 const createMockCommandLog = (count = 3) =>
   Array.from({ length: count }, (_, index) => {
@@ -223,17 +256,7 @@ const createMockInsights = (robot, index = 0) => {
       velocitySeries: createMockSeries(6, randomInt(2, 6)),
       accelerationSeries: createMockSeries(6, randomInt(1, 3))
     },
-    health: {
-      motorTemp: randomInt(32, 68),
-      cpuUsage: randomInt(24, 88),
-      batteryCycles: randomInt(120, 940),
-      diagnostics: [
-        { name: 'Manipulator torque', status: 'ok' },
-        { name: 'Vision system', status: randomItem(['ok', 'warn']) },
-        { name: 'Power bus', status: 'ok' }
-      ],
-      alerts: index % 2 === 0 ? [] : ['Minor slip detected near test pad']
-    },
+    health: withHealthDefaults(),
     ota: {
       currentVersion,
       availableVersion: currentVersion,
@@ -453,6 +476,7 @@ const ensureMapDefaultsForRobot = (robot) => {
       ];
     }
   }
+  insights.health = withHealthDefaults(insights.health);
   state.insights[robot.id] = insights;
   return insights;
 };
