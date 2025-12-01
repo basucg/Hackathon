@@ -165,12 +165,12 @@ const MOCK_COMMAND_VALUES = {
   safety: ['estop-reset', 'clear-fault', 'enable-remote']
 };
 const BANGALORE_BASE = { lat: 12.9716, lng: 77.5946 };
-const BANGALORE_DEFAULT_PATH_POINTS = [
-  { lat: 12.9776, lng: 77.5993 }, // Cubbon Park
-  { lat: 12.9716, lng: 77.5946 }, // MG Road
-  { lat: 12.9352, lng: 77.6245 }, // Koramangala
-  { lat: 12.9836, lng: 77.7278 }, // Whitefield
-  { lat: 13.0285, lng: 77.5417 } // Yeshwanthpur
+const BANGALORE_NAV_PATH = [
+  { label: 'Cubbon Park', lat: 12.9776, lng: 77.5993 },
+  { label: 'MG Road', lat: 12.9716, lng: 77.5946 },
+  { label: 'Koramangala', lat: 12.9352, lng: 77.6245 },
+  { label: 'Whitefield', lat: 12.9836, lng: 77.7278 },
+  { label: 'Yeshwanthpur', lat: 13.0285, lng: 77.5417 }
 ];
 const BANGALORE_DEFAULT_GEOFENCE_RADIUS = 260;
 const DEFAULT_HEALTH_TEMPLATE = {
@@ -219,9 +219,10 @@ const createMockCommandLog = (count = 3) =>
   });
 
 const buildMockPath = () =>
-  BANGALORE_DEFAULT_PATH_POINTS.map((point, index, points) => ({
+  BANGALORE_NAV_PATH.map((point, index, points) => ({
     lat: Number(point.lat.toFixed(5)),
     lng: Number(point.lng.toFixed(5)),
+    label: point.label,
     timestamp: new Date(Date.now() - (points.length - index) * 300000).toISOString()
   }));
 
@@ -276,7 +277,7 @@ const createMockRobot = (index) => {
   const subStatus = randomItem(isOnline ? ONLINE_SUBSTATE_OPTIONS : OFFLINE_SUBSTATE_OPTIONS)?.value ?? 'idle';
   const hackNumber = clamp(randomInt(index + 1, index + 200), HACK_MIN, HACK_MAX);
   const hackName = `${HACK_PREFIX}${hackNumber.toString().padStart(4, '0')}`;
-  const anchorLocation = { ...BANGALORE_DEFAULT_PATH_POINTS[BANGALORE_DEFAULT_PATH_POINTS.length - 1] };
+  const anchorLocation = { ...BANGALORE_NAV_PATH[BANGALORE_NAV_PATH.length - 1] };
   return {
     id: generateMockId(index),
     name: hackName,
@@ -452,29 +453,43 @@ const buildDefaultMapSnapshot = () => {
   };
 };
 
+const ensurePathPoints = (path) => {
+  const basePath = Array.isArray(path) && path.length ? path : buildMockPath();
+  return basePath.map((point, index) => ({
+    ...point,
+    lat: Number(point.lat.toFixed(5)),
+    lng: Number(point.lng.toFixed(5)),
+    timestamp:
+      point.timestamp ||
+      new Date(Date.now() - (basePath.length - index) * 300000).toISOString()
+  }));
+};
+
+const formatPathPointLabel = (point) => {
+  const coords = `${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}`;
+  return point.label ? `${point.label} · ${coords}` : coords;
+};
+
 const ensureMapDefaultsForRobot = (robot) => {
   if (!robot) return null;
   const insights = state.insights[robot.id] ?? {};
   if (!insights.map) {
     insights.map = buildDefaultMapSnapshot();
-  } else {
-    if (!Array.isArray(insights.map.path) || insights.map.path.length < 2) {
-      insights.map.path = buildMockPath();
-    }
-    if (!insights.map.lastKnownLocation) {
-      const lastPoint = insights.map.path[insights.map.path.length - 1];
-      insights.map.lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
-    }
-    if (!insights.map.geofences || !insights.map.geofences.length) {
-      const { lat, lng } = insights.map.lastKnownLocation;
-      insights.map.geofences = [
-        {
-          lat,
-          lng,
-          radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
-        }
-      ];
-    }
+  }
+  insights.map.path = ensurePathPoints(insights.map.path);
+  if (!insights.map.lastKnownLocation) {
+    const lastPoint = insights.map.path[insights.map.path.length - 1];
+    insights.map.lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+  }
+  if (!insights.map.geofences || !insights.map.geofences.length) {
+    const { lat, lng } = insights.map.lastKnownLocation;
+    insights.map.geofences = [
+      {
+        lat,
+        lng,
+        radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
+      }
+    ];
   }
   insights.health = withHealthDefaults(insights.health);
   state.insights[robot.id] = insights;
@@ -1129,7 +1144,9 @@ const setActiveTab = (tab) => {
 
 const renderMapPanel = (insights) => {
   if (!selectors.mapView || !window.L || !insights?.map) return;
-  const { lastKnownLocation, path, geofences } = insights.map;
+  const geofences = insights.map.geofences;
+  const path = ensurePathPoints(insights.map.path);
+  const lastKnownLocation = insights.map.lastKnownLocation || path[path.length - 1];
   if (!mapState.map) {
     mapState.map = window.L.map('map-view');
     mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1168,9 +1185,7 @@ const renderMapPanel = (insights) => {
     .reverse()
     .map(
       (point) =>
-        `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${point.lat.toFixed(
-          4
-        )}, ${point.lng.toFixed(4)}</li>`
+        `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${formatPathPointLabel(point)}</li>`
     )
     .join('');
 
