@@ -194,6 +194,8 @@ sessions(token, userId FK, createdAt)
 | FMEA (detailed) | 1) **Selector mismatch** – detail panel empty → re-render ensures selected id exists. 2) **OTA failure simulation** – progress bar stuck → failure class toggled + log entry. 3) **Manipulator command without robot** – inline error message prevents API call. |
 
 ## 18. Sequence Diagrams
+![Login sequence reference diagram](./images/login-sequence.svg)
+
 ### 18.1 Login & Fleet Refresh
 ```mermaid
 sequenceDiagram
@@ -237,6 +239,8 @@ sequenceDiagram
 ```
 
 ## 19. High-Level Design Diagrams
+![System architecture reference diagram](./images/system-architecture.svg)
+
 ### 19.1 System Architecture
 ```mermaid
 flowchart LR

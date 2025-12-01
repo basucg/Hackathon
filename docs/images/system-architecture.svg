@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="360" viewBox="0 0 760 360">
+  <style>
+    .title { font: bold 20px 'Segoe UI', sans-serif; }
+    .label { font: 14px 'Segoe UI', sans-serif; }
+    .box { fill: #e0f2ff; stroke: #2563eb; stroke-width: 2; rx: 12; }
+    .arrow { stroke: #0f172a; stroke-width: 2; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a" />
+    </marker>
+  </defs>
+  <text class="title" x="30" y="36">Robot Management Console  High-Level Architecture</text>
+
+  <rect class="box" x="40" y="80" width="200" height="220" />
+  <text class="label" x="60" y="110">Frontend SPA</text>
+  <text class="label" x="60" y="140">" Fleet Overview</text>
+  <text class="label" x="60" y="164">" Map &amp; History</text>
+  <text class="label" x="60" y="188">" Health &amp; OTA</text>
+  <text class="label" x="60" y="212">" Teleop Controls</text>
+
+  <rect class="box" x="290" y="100" width="200" height="180" fill="#fdf2f8" stroke="#f43f5e" />
+  <text class="label" x="310" y="130">Node/Express API</text>
+  <text class="label" x="310" y="154">" Routes &amp; Controllers</text>
+  <text class="label" x="310" y="178">" Services (auth, insights)</text>
+  <text class="label" x="310" y="202">" Middleware (requireAuth)</text>
+
+  <rect class="box" x="540" y="130" width="180" height="120" fill="#ecfccb" stroke="#16a34a" />
+  <text class="label" x="560" y="160">SQLite robots.db</text>
+  <text class="label" x="560" y="184">" robots / commands</text>
+  <text class="label" x="560" y="208">" firmware history</text>
+  <text class="label" x="560" y="232">" users / sessions</text>
+
+  <line class="arrow" x1="240" y1="190" x2="290" y2="190" />
+  <text class="label" x="248" y="180">HTTPS</text>
+  <line class="arrow" x1="490" y1="190" x2="540" y2="190" />
+  <text class="label" x="500" y="176">SQLite driver</text>
+
+  <rect class="box" x="40" y="320" width="100" height="30" fill="#dbeafe" stroke="#2563eb" />
+  <text class="label" x="52" y="340">Operator</text>
+  <line class="arrow" x1="90" y1="320" x2="90" y2="300" />
+  <text class="label" x="20" y="300">Browser input</text>
+</svg>

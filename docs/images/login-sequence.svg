@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420">
+  <style>
+    .title { font: bold 20px 'Segoe UI', sans-serif; }
+    .label { font: 14px 'Segoe UI', sans-serif; }
+    .lane { font: bold 14px 'Segoe UI', sans-serif; }
+    .divider { stroke: #94a3b8; stroke-dasharray: 4 4; }
+    .arrow { stroke: #0f172a; stroke-width: 2; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a" />
+    </marker>
+  </defs>
+  <text class="title" x="24" y="32">Login &amp; Fleet Refresh Sequence</text>
+
+  <line class="divider" x1="120" y1="60" x2="120" y2="380" />
+  <line class="divider" x1="320" y1="60" x2="320" y2="380" />
+  <line class="divider" x1="520" y1="60" x2="520" y2="380" />
+  <line class="divider" x1="700" y1="60" x2="700" y2="380" />
+
+  <text class="lane" x="70" y="52">User</text>
+  <text class="lane" x="250" y="52">Frontend UI</text>
+  <text class="lane" x="475" y="52">API</text>
+  <text class="lane" x="665" y="52">SQLite</text>
+
+  <text class="label" x="40" y="90">Enter credentials</text>
+  <line class="arrow" x1="120" y1="100" x2="320" y2="100" />
+  <text class="label" x="180" y="92">Login form submit</text>
+
+  <line class="arrow" x1="320" y1="130" x2="520" y2="130" />
+  <text class="label" x="340" y="122">POST /api/auth/login</text>
+
+  <line class="arrow" x1="520" y1="160" x2="700" y2="160" />
+  <text class="label" x="540" y="152">Validate credentials</text>
+
+  <line class="arrow" x1="700" y1="190" x2="520" y2="190" />
+  <text class="label" x="560" y="182">Token + session row</text>
+
+  <line class="arrow" x1="520" y1="220" x2="320" y2="220" />
+  <text class="label" x="360" y="212">{ token, user }</text>
+
+  <line class="arrow" x1="320" y1="250" x2="520" y2="250" />
+  <text class="label" x="340" y="242">GET /api/robots</text>
+
+  <line class="arrow" x1="520" y1="280" x2="700" y2="280" />
+  <text class="label" x="540" y="272">Select robots</text>
+
+  <line class="arrow" x1="700" y1="310" x2="520" y2="310" />
+  <text class="label" x="560" y="302">Robot rows</text>
+
+  <line class="arrow" x1="520" y1="340" x2="320" y2="340" />
+  <text class="label" x="360" y="332">Normalize + render</text>
+
+  <line class="arrow" x1="320" y1="360" x2="520" y2="360" />
+  <text class="label" x="340" y="352">GET /api/robots/:id/insights</text>
+</svg>
