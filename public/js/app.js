@@ -470,43 +470,61 @@ const formatPathPointLabel = (point) => {
   return point.label ? `${point.label} · ${coords}` : coords;
 };
 
-const buildFallbackMapSvg = (path, center, geofences = []) => {
+const FALLBACK_ZOOM = 13;
+const lonToTile = (lon, zoom) => Math.floor(((lon + 180) / 360) * 2 ** zoom);
+const latToTile = (lat, zoom) =>
+  Math.floor(
+    ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) *
+      2 ** zoom
+  );
+const tileToLon = (x, zoom) => (x / 2 ** zoom) * 360 - 180;
+const tileToLat = (y, zoom) => {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** zoom;
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+};
+
+const buildFallbackMapMarkup = (path, center, geofences = []) => {
   const width = 360;
   const height = 220;
-  const padding = 20;
-  const lats = path.map((pt) => pt.lat);
-  const lngs = path.map((pt) => pt.lng);
-  const minLat = Math.min(...lats, center.lat);
-  const maxLat = Math.max(...lats, center.lat);
-  const minLng = Math.min(...lngs, center.lng);
-  const maxLng = Math.max(...lngs, center.lng);
-  const latSpan = Math.max(maxLat - minLat, 0.01);
-  const lngSpan = Math.max(maxLng - minLng, 0.01);
+  const tileX = lonToTile(center.lng, FALLBACK_ZOOM);
+  const tileY = latToTile(center.lat, FALLBACK_ZOOM);
+  const lonLeft = tileToLon(tileX, FALLBACK_ZOOM);
+  const lonRight = tileToLon(tileX + 1, FALLBACK_ZOOM);
+  const latTop = tileToLat(tileY, FALLBACK_ZOOM);
+  const latBottom = tileToLat(tileY + 1, FALLBACK_ZOOM);
+  const tileUrl = `https://tile.openstreetmap.org/${FALLBACK_ZOOM}/${tileX}/${tileY}.png`;
+
   const project = (pt) => ({
-    x: padding + ((pt.lng - minLng) / lngSpan) * (width - padding * 2),
-    y: padding + ((maxLat - pt.lat) / latSpan) * (height - padding * 2)
+    x: ((pt.lng - lonLeft) / (lonRight - lonLeft)) * width,
+    y: ((latTop - pt.lat) / (latTop - latBottom)) * height
   });
-  const polyline = path.map((pt) => {
-    const { x, y } = project(pt);
-    return `${x},${y}`;
-  });
+
+  const polylinePoints = path
+    .map((pt) => {
+      const { x, y } = project(pt);
+      return `${x},${y}`;
+    })
+    .join(' ');
+
   const centerPoint = project(center);
   const geofenceCircle = geofences?.length
     ? (() => {
         const radiusMeters = geofences[0].radius ?? BANGALORE_DEFAULT_GEOFENCE_RADIUS;
         const metersPerDegreeLat = 111320;
         const radiusLat = radiusMeters / metersPerDegreeLat;
-        const radiusSvg = ((radiusLat / latSpan) * (height - padding * 2)) || 12;
+        const radiusSvg = ((radiusLat / (latTop - latBottom)) * height) || 14;
         return `<circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="${radiusSvg}" fill="rgba(247,37,133,0.12)" stroke="#f72585" stroke-width="1" />`;
       })()
     : '';
+
   return `
-    <svg class="fallback-map" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Fallback navigation path">
-      <rect width="${width}" height="${height}" rx="16" fill="rgba(15,23,42,0.9)" stroke="rgba(148,163,184,0.35)"/>
-      <polyline points="${polyline.join(' ')}" fill="none" stroke="#4cc9f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      ${geofenceCircle}
-      <circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="5" fill="#f72585" stroke="#fff" stroke-width="1.5"/>
-    </svg>
+    <div class="fallback-map-img" style="background-image:url('${tileUrl}')">
+      <svg class="fallback-map-overlay" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Fallback navigation path">
+        <polyline points="${polylinePoints}" fill="none" stroke="#4cc9f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        ${geofenceCircle}
+        <circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="5" fill="#f72585" stroke="#fff" stroke-width="1.5" />
+      </svg>
+    </div>
   `;
 };
 
@@ -1229,7 +1247,7 @@ const renderMapPanel = (insights) => {
 
       setTimeout(() => mapState.map.invalidateSize(), 250);
     } else {
-      selectors.mapView.innerHTML = buildFallbackMapSvg(path, lastKnownLocation, geofences);
+      selectors.mapView.innerHTML = buildFallbackMapMarkup(path, lastKnownLocation, geofences);
     }
   }
 
