@@ -165,17 +165,15 @@ const MOCK_COMMAND_VALUES = {
   safety: ['estop-reset', 'clear-fault', 'enable-remote']
 };
 const BANGALORE_BASE = { lat: 12.9716, lng: 77.5946 };
-const BANGALORE_COORD_SPREAD = 0.045;
-const BANGALORE_PATH_SPREAD = 0.02;
+const BANGALORE_DEFAULT_PATH_POINTS = [
+  { lat: 12.9716, lng: 77.5946 }, // MG Road
+  { lat: 12.9352, lng: 77.6245 } // Koramangala
+];
+const BANGALORE_DEFAULT_GEOFENCE_RADIUS = 260;
 
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const randomItem = (array = []) => array[randomInt(0, Math.max(array.length - 1, 0))];
-const randomOffset = (spread = 0.25) => Number(((Math.random() - 0.5) * spread).toFixed(4));
 const generateMockId = (index) => `mock-${index}-${Math.random().toString(16).slice(2, 8)}`;
-const randomGeoPoint = (base = BANGALORE_BASE, spread = BANGALORE_COORD_SPREAD) => ({
-  lat: Number((base.lat + randomOffset(spread)).toFixed(5)),
-  lng: Number((base.lng + randomOffset(spread)).toFixed(5))
-});
 
 const createMockCommandLog = (count = 3) =>
   Array.from({ length: count }, (_, index) => {
@@ -187,13 +185,12 @@ const createMockCommandLog = (count = 3) =>
     };
   });
 
-const buildMockPath = (anchorPoint = randomGeoPoint()) => {
-  const firstPoint = randomGeoPoint(anchorPoint, BANGALORE_PATH_SPREAD);
-  return [
-    { ...firstPoint, timestamp: new Date(Date.now() - 600000).toISOString() },
-    { ...anchorPoint, timestamp: new Date(Date.now() - 120000).toISOString() }
-  ];
-};
+const buildMockPath = () =>
+  BANGALORE_DEFAULT_PATH_POINTS.map((point, index, points) => ({
+    lat: Number(point.lat.toFixed(5)),
+    lng: Number(point.lng.toFixed(5)),
+    timestamp: new Date(Date.now() - (points.length - index) * 300000).toISOString()
+  }));
 
 const createMockSeries = (length, base) =>
   Array.from({ length }, (_, t) => ({
@@ -202,10 +199,10 @@ const createMockSeries = (length, base) =>
   }));
 
 const createMockInsights = (robot, index = 0) => {
-  const anchorLocation = robot.insightsLocation || randomGeoPoint();
-  const path = buildMockPath(anchorLocation);
-  const lastKnownLocation = { ...anchorLocation };
-  path[path.length - 1] = { ...lastKnownLocation, timestamp: new Date().toISOString() };
+  const path = buildMockPath();
+  const lastPoint = path[path.length - 1];
+  const lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+  path[path.length - 1] = { ...path[path.length - 1], timestamp: new Date().toISOString() };
   const currentVersion = `v2.${(index % 4) + 1}.0`;
   return {
     telemetry: {
@@ -218,7 +215,7 @@ const createMockInsights = (robot, index = 0) => {
         {
           lat: lastKnownLocation.lat,
           lng: lastKnownLocation.lng,
-          radius: randomInt(180, 380)
+          radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
         }
       ]
     },
@@ -256,7 +253,7 @@ const createMockRobot = (index) => {
   const subStatus = randomItem(isOnline ? ONLINE_SUBSTATE_OPTIONS : OFFLINE_SUBSTATE_OPTIONS)?.value ?? 'idle';
   const hackNumber = clamp(randomInt(index + 1, index + 200), HACK_MIN, HACK_MAX);
   const hackName = `${HACK_PREFIX}${hackNumber.toString().padStart(4, '0')}`;
-  const anchorLocation = randomGeoPoint();
+  const anchorLocation = { ...BANGALORE_DEFAULT_PATH_POINTS[BANGALORE_DEFAULT_PATH_POINTS.length - 1] };
   return {
     id: generateMockId(index),
     name: hackName,
@@ -415,6 +412,51 @@ const useFallbackFleet = (count) => {
   renderDetail();
 };
 
+const buildDefaultMapSnapshot = () => {
+  const path = buildMockPath();
+  const lastPoint = path[path.length - 1];
+  const lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+  return {
+    lastKnownLocation,
+    path,
+    geofences: [
+      {
+        lat: lastKnownLocation.lat,
+        lng: lastKnownLocation.lng,
+        radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
+      }
+    ]
+  };
+};
+
+const ensureMapDefaultsForRobot = (robot) => {
+  if (!robot) return null;
+  const insights = state.insights[robot.id] ?? {};
+  if (!insights.map) {
+    insights.map = buildDefaultMapSnapshot();
+  } else {
+    if (!Array.isArray(insights.map.path) || insights.map.path.length < 2) {
+      insights.map.path = buildMockPath();
+    }
+    if (!insights.map.lastKnownLocation) {
+      const lastPoint = insights.map.path[insights.map.path.length - 1];
+      insights.map.lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+    }
+    if (!insights.map.geofences || !insights.map.geofences.length) {
+      const { lat, lng } = insights.map.lastKnownLocation;
+      insights.map.geofences = [
+        {
+          lat,
+          lng,
+          radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
+        }
+      ];
+    }
+  }
+  state.insights[robot.id] = insights;
+  return insights;
+};
+
 const buildStatsRows = (stats) => {
   if (!selectors.detailStats) return;
   selectors.detailStats.innerHTML = '';
@@ -442,12 +484,14 @@ const renderOverviewStats = (robot) => {
   const statusSummary = `${connectivity.isOnline ? 'Online' : 'Offline'} · ${formatSubstateLabel(
     connectivity.substate
   )}`;
-  const insightData = state.insights[robot.id] || {};
+  const insightData = ensureMapDefaultsForRobot(robot) || {};
+  const coordinates = insightData.map?.lastKnownLocation || robot.insightsLocation || BANGALORE_BASE;
+  robot.insightsLocation = coordinates;
   const telemetryTime = insightData.telemetry?.timestamp || robot.lastHeartbeat;
   const stats = [
     { label: 'Status', value: statusSummary },
     { label: 'Battery', value: formatPercent(robot.batteryLevel) },
-    { label: 'Location coordinates', value: formatCoordinates(robot.insightsLocation) },
+    { label: 'Location coordinates', value: formatCoordinates(coordinates) },
     { label: 'Heartbeat', value: formatHeartbeat(robot.lastHeartbeat) },
     { label: 'Location', value: robot.location || '—' },
     { label: 'Time', value: formatTimeOnly(telemetryTime) },
@@ -1031,9 +1075,9 @@ bootstrap();
 const renderInsights = () => {
   const robot = getSelectedRobot();
   if (!robot) return;
-  const data = state.insights[robot.id];
+  const data = ensureMapDefaultsForRobot(robot);
   if (!data) return;
-  robot.insightsLocation = data.map?.lastKnownLocation;
+  robot.insightsLocation = data.map?.lastKnownLocation || BANGALORE_BASE;
   renderOverviewStats(robot);
   renderMapPanel(data);
   renderCharts(data);
