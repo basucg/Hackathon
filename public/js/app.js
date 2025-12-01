@@ -2,7 +2,8 @@ const state = {
   robots: [],
   selectedRobotId: null,
   activeTab: 'overview',
-  insights: {}
+  insights: {},
+  isFallbackFleet: false
 };
 
 const auth = {
@@ -35,6 +36,7 @@ const selectors = {
   logoutButton: document.getElementById('logout-btn'),
   fleetList: document.getElementById('fleet-list'),
   fleetCount: document.getElementById('fleet-count'),
+  fleetSelector: document.getElementById('fleet-selector'),
   refreshButton: document.getElementById('refresh-btn'),
   lastRefresh: document.getElementById('last-refresh'),
   detailContent: document.getElementById('detail-content'),
@@ -47,7 +49,10 @@ const selectors = {
   statusForm: document.getElementById('status-form'),
   batteryInput: document.getElementById('battery-input'),
   signalInput: document.getElementById('signal-input'),
+  powerStateInput: document.getElementById('power-state-input'),
+  powerSubstateInput: document.getElementById('power-substate-input'),
   locationInput: document.getElementById('location-input'),
+  missionInput: document.getElementById('mission-input'),
   notesInput: document.getElementById('notes-input'),
   tasksInput: document.getElementById('tasks-input'),
   uptimeInput: document.getElementById('uptime-input'),
@@ -135,6 +140,75 @@ const OFFLINE_SUBSTATE_OPTIONS = [
 const ONLINE_SUBSTATE_SET = new Set(ONLINE_SUBSTATE_OPTIONS.map((option) => option.value));
 const OFFLINE_SUBSTATE_SET = new Set(OFFLINE_SUBSTATE_OPTIONS.map((option) => option.value));
 
+const MOCK_MODELS = ['Atlas Heavy', 'Scout Rover', 'Payload Lifter', 'Sentinel Drone', 'Surveyor XR'];
+const MOCK_LOCATIONS = ['Charging Dock', 'Sector 7B', 'Warehouse Bay', 'North Runway', 'Hangar 3', 'Flooded Mine'];
+const MOCK_MISSIONS = ['Perimeter Patrol', 'Cargo Transfer', 'Pipeline Inspection', 'Thermal Sweep', 'Rescue Standby'];
+const MOCK_NOTES = [
+  'Verified joint calibration before shift.',
+  'Awaiting replacement lidar module.',
+  'Power cycled after thermal warning cleared.',
+  'Operator reported slight drift near dock.',
+  'Ready for OTA validation sequence.'
+];
+const MOCK_COMMAND_TYPES = ['navigate', 'manipulator', 'ota', 'safety'];
+const MOCK_COMMAND_VALUES = {
+  navigate: ['waypoint-alpha', 'sector-7', 'grid-c3', 'return-home'],
+  manipulator: ['joint-update', 'grip-hold', 'grip-release'],
+  ota: ['firmware-check', 'ota-start', 'verify-version'],
+  safety: ['estop-reset', 'clear-fault', 'enable-remote']
+};
+
+const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randomItem = (array = []) => array[randomInt(0, Math.max(array.length - 1, 0))];
+const randomOffset = (spread = 0.25) => Number(((Math.random() - 0.5) * spread).toFixed(4));
+const generateMockId = (index) => `mock-${index}-${Math.random().toString(16).slice(2, 8)}`;
+
+const createMockCommandLog = (count = 3) =>
+  Array.from({ length: count }, (_, index) => {
+    const type = randomItem(MOCK_COMMAND_TYPES);
+    return {
+      type,
+      value: randomItem(MOCK_COMMAND_VALUES[type]),
+      issuedAt: new Date(Date.now() - randomInt(index + 1, index + 5) * 60000).toISOString()
+    };
+  });
+
+const createMockRobot = (index) => {
+  const isOnline = Math.random() > 0.25;
+  const status = isOnline ? 'online' : 'offline';
+  const subStatus = randomItem(isOnline ? ONLINE_SUBSTATE_OPTIONS : OFFLINE_SUBSTATE_OPTIONS)?.value ?? 'idle';
+  const hackNumber = clamp(randomInt(index + 1, index + 200), HACK_MIN, HACK_MAX);
+  const hackName = `${HACK_PREFIX}${hackNumber.toString().padStart(4, '0')}`;
+  return {
+    id: generateMockId(index),
+    name: hackName,
+    identifier: hackName,
+    hackName,
+    status,
+    subStatus,
+    operationStatus: subStatus,
+    model: randomItem(MOCK_MODELS),
+    batteryLevel: randomInt(32, 98),
+    temperatureC: randomInt(24, 70),
+    signalStrength: randomInt(isOnline ? 62 : 12, 100),
+    location: randomItem(MOCK_LOCATIONS),
+    mission: randomItem(MOCK_MISSIONS),
+    lastHeartbeat: new Date(Date.now() - randomInt(1, 90) * 60000).toISOString(),
+    metrics: {
+      tasksCompleted: randomInt(24, 620),
+      uptimeHours: randomInt(120, 2400)
+    },
+    notes: randomItem(MOCK_NOTES),
+    recentCommands: createMockCommandLog(randomInt(1, 4)),
+    insightsLocation: {
+      lat: 37.7749 + randomOffset(0.3),
+      lng: -122.4194 + randomOffset(0.3)
+    }
+  };
+};
+
+const generateMockFleet = (count = 6) => Array.from({ length: count }, (_, index) => createMockRobot(index));
+
 const parseHackNumber = (value = '') => {
   const match = HACK_PATTERN.exec(value);
   if (!match) {
@@ -174,6 +248,88 @@ const formatTimeOnly = (value) => (value ? new Date(value).toLocaleTimeString() 
 const formatTemperature = (value) => (value !== undefined ? `${value} °C` : '—');
 const formatUptime = (value) => (value !== undefined ? `${value} h` : '—');
 const degreesLabel = (value) => `${Math.round(value)}°`;
+
+const normalizeRobot = (robot = {}, index = 0) => {
+  const hackName = ensureHackName(robot, index);
+  const resolvedSubstate = robot.subStatus || robot.operationStatus || 'idle';
+  const resolvedStatus =
+    robot.status || (OFFLINE_SUBSTATE_SET.has(resolvedSubstate) ? 'offline' : 'online');
+  return {
+    id: robot.id ?? `${hackName}-${index}`,
+    name: robot.name ?? hackName,
+    identifier: robot.identifier ?? hackName,
+    hackName,
+    model: robot.model ?? 'Multi-role',
+    batteryLevel: robot.batteryLevel ?? 100,
+    signalStrength: robot.signalStrength ?? 100,
+    status: resolvedStatus,
+    subStatus: resolvedSubstate,
+    operationStatus: robot.operationStatus ?? resolvedSubstate,
+    location: robot.location ?? '—',
+    mission: robot.mission ?? 'Standby',
+    lastHeartbeat: robot.lastHeartbeat ?? new Date().toISOString(),
+    metrics: {
+      tasksCompleted: robot.metrics?.tasksCompleted ?? 0,
+      uptimeHours: robot.metrics?.uptimeHours ?? 0
+    },
+    temperatureC: robot.temperatureC ?? 0,
+    notes: robot.notes ?? '',
+    recentCommands: Array.isArray(robot.recentCommands) ? robot.recentCommands : [],
+    insightsLocation: robot.insightsLocation
+  };
+};
+
+const deriveConnectivity = (robot = {}) => {
+  const status = robot.status ?? 'online';
+  const substate = robot.subStatus ?? robot.operationStatus ?? (status === 'online' ? 'idle' : 'shutdown');
+  return {
+    status,
+    substate,
+    isOnline: status === 'online'
+  };
+};
+
+const setSubstateOptions = (status = 'online', selectedValue) => {
+  if (!selectors.powerSubstateInput) return;
+  const options = getSubstateOptions(status);
+  selectors.powerSubstateInput.innerHTML = '';
+  options.forEach((option) => {
+    const opt = document.createElement('option');
+    opt.value = option.value;
+    opt.textContent = option.label;
+    selectors.powerSubstateInput.appendChild(opt);
+  });
+  if (selectedValue && options.some((option) => option.value === selectedValue)) {
+    selectors.powerSubstateInput.value = selectedValue;
+  } else if (options[0]) {
+    selectors.powerSubstateInput.value = options[0].value;
+  }
+};
+
+const syncPowerInputs = (robot) => {
+  if (!selectors.powerStateInput || !selectors.powerSubstateInput || !robot) return;
+  const connectivity = deriveConnectivity(robot);
+  const stateValue = connectivity.isOnline ? 'online' : 'offline';
+  selectors.powerStateInput.value = stateValue;
+  setSubstateOptions(stateValue, connectivity.substate);
+};
+
+const applyRobotsToState = (robots = [], { fallback = false } = {}) => {
+  state.robots = robots.map((robot, index) => normalizeRobot(robot, index));
+  state.isFallbackFleet = fallback;
+  if (state.selectedRobotId && !state.robots.some((robot) => robot.id === state.selectedRobotId)) {
+    state.selectedRobotId = null;
+  }
+  if (!state.selectedRobotId && state.robots.length) {
+    state.selectedRobotId = state.robots[0].id;
+  }
+  renderFleetList();
+  renderDetail();
+};
+
+const useFallbackFleet = (count) => {
+  applyRobotsToState(generateMockFleet(count ?? randomInt(5, 8)), { fallback: true });
+};
 
 const buildStatsRows = (stats) => {
   if (!selectors.detailStats) return;
@@ -392,6 +548,33 @@ const selectRobot = (robotId) => {
   loadInsightsForRobot(robotId);
 };
 
+const renderFleetSelector = () => {
+  if (!selectors.fleetSelector) return;
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = 'Select robot';
+  placeholderOption.disabled = true;
+  placeholderOption.selected = !state.selectedRobotId;
+
+  selectors.fleetSelector.innerHTML = '';
+  selectors.fleetSelector.appendChild(placeholderOption);
+
+  state.robots.forEach((robot) => {
+    const option = document.createElement('option');
+    option.value = String(robot.id);
+    option.textContent = robot.hackName || robot.name;
+    if (state.selectedRobotId && robot.id === state.selectedRobotId) {
+      option.selected = true;
+    }
+    selectors.fleetSelector.appendChild(option);
+  });
+
+  selectors.fleetSelector.disabled = state.robots.length === 0;
+  if (state.selectedRobotId) {
+    selectors.fleetSelector.value = String(state.selectedRobotId);
+  }
+};
+
 const renderFleetList = () => {
   selectors.fleetList.innerHTML = '';
   state.robots.forEach((robot, index) => {
@@ -431,7 +614,11 @@ const renderFleetList = () => {
     state.selectedRobotId = state.robots[0]?.id ?? null;
   }
 
-  selectors.fleetCount.textContent = `${state.robots.length} robots available`;
+  renderFleetSelector();
+  const fleetLabel = state.isFallbackFleet
+    ? `${state.robots.length} demo robots ready`
+    : `${state.robots.length} robots available`;
+  selectors.fleetCount.textContent = fleetLabel;
 };
 
 const renderDetail = () => {
@@ -489,12 +676,18 @@ const loadRobots = async () => {
   selectors.refreshButton.disabled = true;
   try {
     const robots = await fetchRobots();
-    state.robots = robots.map((robot, index) => normalizeRobot(robot, index));
-    renderFleetList();
-    renderDetail();
+    if (Array.isArray(robots) && robots.length) {
+      applyRobotsToState(robots);
+    } else {
+      useFallbackFleet();
+    }
     updateTimestamp();
   } catch (error) {
     console.error('Failed to load robots', error); // eslint-disable-line no-console
+    if (!state.robots.length && auth.token) {
+      useFallbackFleet();
+      updateTimestamp();
+    }
   } finally {
     selectors.refreshButton.disabled = false;
   }
@@ -704,6 +897,17 @@ selectors.themeToggle.addEventListener('change', (event) => {
     document.body.removeAttribute('data-theme');
   }
 });
+selectors.powerStateInput?.addEventListener('change', (event) => {
+  setSubstateOptions(event.target.value);
+});
+selectors.fleetSelector?.addEventListener('change', (event) => {
+  const { value } = event.target;
+  if (!value) return;
+  const robot = state.robots.find((entry) => String(entry.id) === value);
+  if (robot) {
+    selectRobot(robot.id);
+  }
+});
 [
   ['shoulder', selectors.jointShoulderInput],
   ['elbow', selectors.jointElbowInput],
@@ -718,6 +922,7 @@ selectors.manipulatorSendButton?.addEventListener('click', sendManipulatorComman
 selectors.gripHoldButton?.addEventListener('click', handleGripHold);
 selectors.gripReleaseButton?.addEventListener('click', handleGripRelease);
 updateManipulatorUI();
+setSubstateOptions(selectors.powerStateInput?.value || 'online');
 
 const bootstrap = async () => {
   if (!auth.token) {

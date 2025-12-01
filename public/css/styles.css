@@ -148,6 +148,7 @@ p {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .theme-toggle {
@@ -160,6 +161,22 @@ p {
 
 .theme-toggle input {
   accent-color: var(--accent);
+}
+
+.fleet-select {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 1.25rem 0.35rem 0.85rem;
+  font-size: 0.9rem;
+  background: #fff;
+  color: var(--text);
+  min-width: 160px;
+  cursor: pointer;
+}
+
+.fleet-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .fleet-list {
