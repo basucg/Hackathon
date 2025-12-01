@@ -16,7 +16,8 @@ const mapState = {
   tileLayer: null,
   pathLayer: null,
   marker: null,
-  geofenceLayer: null
+  geofenceLayer: null,
+  markers: []
 };
 
 const chartState = {
@@ -517,12 +518,27 @@ const buildFallbackMapMarkup = (path, center, geofences = []) => {
       })()
     : '';
 
+  const markerTags = path
+    .map((point, index) => {
+      const { x, y } = project(point);
+      const isLast = index === path.length - 1;
+      const label = point.label || `${point.lat.toFixed(3)}, ${point.lng.toFixed(3)}`;
+      const offsetY = y - 10;
+      return `
+        <g>
+          <circle cx="${x}" cy="${y}" r="${isLast ? 5 : 4}" fill="${isLast ? '#f72585' : '#4cc9f0'}" stroke="#0f172a" stroke-width="1" />
+          <text x="${x}" y="${offsetY}" fill="#f8fafc" font-size="10" text-anchor="middle" font-weight="600" paint-order="stroke" stroke="#0f172a" stroke-width="1">${label}</text>
+        </g>
+      `;
+    })
+    .join('');
+
   return `
     <div class="fallback-map-img" style="background-image:url('${tileUrl}')">
       <svg class="fallback-map-overlay" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Fallback navigation path">
         <polyline points="${polylinePoints}" fill="none" stroke="#4cc9f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
         ${geofenceCircle}
-        <circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="5" fill="#f72585" stroke="#fff" stroke-width="1.5" />
+        ${markerTags}
       </svg>
     </div>
   `;
@@ -1232,6 +1248,29 @@ const renderMapPanel = (insights) => {
         mapState.map.removeLayer(mapState.marker);
       }
       mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
+
+      if (Array.isArray(mapState.markers)) {
+        mapState.markers.forEach((markerInstance) => mapState.map.removeLayer(markerInstance));
+      }
+      mapState.markers = [];
+      path.forEach((point, index) => {
+        const isLast = index === path.length - 1;
+        const marker = window.L.circleMarker([point.lat, point.lng], {
+          radius: isLast ? 6 : 4,
+          color: isLast ? '#f72585' : '#0ea5e9',
+          weight: 2,
+          fillColor: isLast ? '#f72585' : '#4cc9f0',
+          fillOpacity: 1
+        }).addTo(mapState.map);
+        const tooltipLabel =
+          point.label || `${point.lat.toFixed(3)}, ${point.lng.toFixed(3)}`;
+        marker.bindTooltip(tooltipLabel, {
+          permanent: true,
+          direction: 'top',
+          className: 'path-label'
+        });
+        mapState.markers.push(marker);
+      });
 
       if (mapState.geofenceLayer) {
         mapState.map.removeLayer(mapState.geofenceLayer);
