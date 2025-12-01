@@ -1152,7 +1152,6 @@ const renderMapPanel = (insights) => {
   const path = ensurePathPoints(insights.map.path);
   const lastKnownLocation = insights.map.lastKnownLocation || path[path.length - 1];
   const geofences = insights.map.geofences;
-
   if (selectors.mapView && window.L) {
     if (!mapState.map) {
       mapState.map = window.L.map('map-view');
@@ -1190,6 +1189,14 @@ const renderMapPanel = (insights) => {
     setTimeout(() => mapState.map.invalidateSize(), 250);
   }
 
+  if ((!window.L || !selectors.mapView) && selectors.pathLogList) {
+    const staticUrl = buildStaticMapUrl(path, lastKnownLocation);
+    selectors.pathLogList.insertAdjacentHTML(
+      'beforebegin',
+      `<div class="static-map-preview"><img src="${staticUrl}" alt="Navigation path snapshot" /></div>`
+    );
+  }
+
   if (selectors.pathLogList) {
     const logEntries = path
       .slice()
@@ -1201,6 +1208,15 @@ const renderMapPanel = (insights) => {
       .join('');
     selectors.pathLogList.innerHTML = logEntries || '<li>No navigation history available.</li>';
   }
+};
+
+const buildStaticMapUrl = (path, center) => {
+  const locationParam = path.map((point) => `${point.lat},${point.lng}`).join('|');
+  const encodedPath = encodeURIComponent(
+    `color:0x4cc9f0|weight:5|${path.map((point) => `${point.lat},${point.lng}`).join('|')}`
+  );
+  const centerParam = `${center.lat},${center.lng}`;
+  return `https://maps.googleapis.com/maps/api/staticmap?size=640x320&path=${encodedPath}&markers=color:red%7C${locationParam}&center=${centerParam}&zoom=13&key=YOUR_GOOGLE_MAPS_KEY`;
 };
 
 const renderCharts = (insights) => {
