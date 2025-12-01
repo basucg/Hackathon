@@ -192,3 +192,90 @@ sessions(token, userId FK, createdAt)
 | Reliability Metrics | While hardware MTTF/MTBF require backend data, UI displays heartbeats and path logs to estimate activity; fallback ensures dashboard uptime ~100 % even when upstream data missing. |
 | WCA for Map Path | Fixed Bangalore waypoints cap path length and geofence radius, preventing Leaflet performance issues. |
 | FMEA (detailed) | 1) **Selector mismatch** – detail panel empty → re-render ensures selected id exists. 2) **OTA failure simulation** – progress bar stuck → failure class toggled + log entry. 3) **Manipulator command without robot** – inline error message prevents API call. |
+
+## 18. Sequence Diagrams
+### 18.1 Login & Fleet Refresh
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant UI as Frontend UI
+    participant API as Auth/Robot API
+    participant DB as SQLite
+
+    User->>UI: Submit credentials
+    UI->>API: POST /api/auth/login
+    API->>DB: Validate username/password
+    DB-->>API: Auth result + token record
+    API-->>UI: { token, user }
+    UI->>UI: store token + show app view
+    UI->>API: GET /api/robots (Authorization)
+    API->>DB: SELECT * FROM robots
+    DB-->>API: Robot rows
+    API-->>UI: { data: robots }
+    UI->>UI: normalize robots + render fleet + select robot
+    UI->>API: GET /api/robots/:id/insights
+    API-->>UI: Map/health telemetry
+    UI->>UI: render stats, map, health, OTA panels
+```
+
+### 18.2 Fallback Fleet Generation
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as Frontend UI
+    participant API as Robot API
+
+    UI->>API: GET /api/robots
+    API-->>UI: (timeout / empty / error)
+    UI->>UI: useFallbackFleet()
+    UI->>UI: generateMockFleet(N)
+    UI->>UI: createMockInsights(robot[i])
+    UI->>UI: ensureMapDefaultsForRobot(robot[i])
+    UI->>UI: render fleet list + selector + detail panels
+    Note over UI: Badge updated to “demo robots ready”
+```
+
+## 19. High-Level Design Diagrams
+### 19.1 System Architecture
+```mermaid
+flowchart LR
+    subgraph Frontend
+        UI[Vanilla JS SPA]
+        Map[Leaflet Map]
+        Charts[Chart.js]
+        Manipulator[SVG Arm Preview]
+    end
+
+    subgraph Backend
+        API[Express Routes/Controllers]
+        Services[Services (insightService, auth)]
+        Repo[Repositories (robots, firmware, auth)]
+    end
+
+    DB[(SQLite robots.db)]
+
+    User[Operator Browser] --> UI
+    UI -->|fetch/POST| API
+    API --> Services --> Repo --> DB
+    Services --> API
+    UI --> Map
+    UI --> Charts
+    UI --> Manipulator
+```
+
+### 19.2 Frontend Module Interactions
+```mermaid
+flowchart TB
+    Clicks(User Actions) --> Selectors
+    Selectors --> State
+    State --> Renderers
+    Renderers --> DOM
+    Renderers --> MapState
+    Renderers --> ChartState
+    State --> APIClient
+    APIClient --> Auth
+    Auth --> APIClient
+    APIClient --> ExternalAPI[(REST API)]
+    ExternalAPI --> State
+```
