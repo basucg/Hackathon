@@ -552,20 +552,6 @@ p {
   font-size: 0.85rem;
 }
 
-.static-map-preview {
-  margin-bottom: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-}
-
-.static-map-preview img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
