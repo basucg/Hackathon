@@ -137,3 +137,58 @@ sessions(token, userId FK, createdAt)
 - Support per-finger force sensors once hardware is available.
 - Integrate real video feed & sensors if hardware available.
 - Internationalization of UI labels and measurement units.
+
+## 15. Product Requirements Extension
+- **Fleet availability**: At least one robot (real or fallback) must appear immediately after login with populated telemetry (status, battery, signal, mission, coordinates, command log) and a dropdown to jump between robots.
+- **Fallback fidelity**: When `/api/robots` or `/api/robots/:id/insights` fail, generate deterministic Bengaluru-based telemetry, including five waypoint coordinates, geofence radius, kinematics series, and health defaults; badge indicates “demo robots ready”.
+- **Map & History**: Render Leaflet map, geofence circle, and a chronological path log sourced from at least two geo samples (currently five fixed waypoints). Charts always refresh with the selected robot.
+- **Health tab**: Always show numeric values (defaults: 48 °C motor temp, 36 % CPU usage, 512 battery cycles) and diagnostics/alerts even when backend omits fields.
+- **Control surfaces**: Status form, manipulator sliders/buttons, and OTA form remain interactive regardless of data source; validation prevents empty submissions.
+- **Session handling**: Authentication required for all API calls; expired tokens immediately trigger logout and reset UI state.
+- **UX safeguards**: Refresh button disables during fetch, timestamps update per load, and selectors/list maintain synchronized active states.
+
+## 16. Component & Module Test Plan
+1. **Authentication**
+   - Verify successful login toggles views and stores token.
+   - Invalid credentials surface inline error and keep login view visible.
+   - 401 responses invoke `forceLogout` and clear localStorage.
+2. **Fleet Data Engine**
+   - `fetchRobots` returns array and normalizes `HACK_<n>` naming.
+   - Empty or errored responses trigger `useFallbackFleet`, which seeds state, selector, and badge.
+3. **Mock Data Generator**
+   - `generateMockFleet` produces deterministic robots with Bengaluru coordinates.
+   - `createMockInsights` returns five-point path, geofence, kinematics, health defaults, and OTA metadata.
+4. **Map Module**
+   - `ensureMapDefaultsForRobot` populates map snapshot when insights missing or incomplete.
+   - `renderMapPanel` draws polyline across five waypoints and path log lists them newest-first.
+5. **Health Module**
+   - `withHealthDefaults` injects 48 °C / 36 % / 512 values when API omits them.
+   - Diagnostics list shows at least manipulator torque, power bus, and vision entries; alerts fallback to “No active alerts”.
+6. **Selection & Detail View**
+   - Fleet list click or dropdown change updates `state.selectedRobotId`, stats grid, map, charts, and health readings.
+   - Refresh maintains selection when robot still present; otherwise selects first entry.
+7. **Forms & Commands**
+   - Status form requires at least one field; successful submission clears form and refreshes telemetry.
+   - Manipulator button sends `manipulator` command with current joint values; grip buttons adjust preview + message.
+   - OTA form logs progress, updates firmware history, and resets simulate-failure toggle.
+8. **Theme Toggle**
+   - Checkbox switches `data-theme` attribute; removing check reverts to default.
+9. **Error Handling**
+   - Console logs emit single error per failed fetch; UI remains responsive and displays fallback data.
+
+## 17. Design Analysis
+| Aspect | Summary | Notes |
+| --- | --- | --- |
+| Worst-Case Analysis (WCA) | Handles zero-robot response by generating fallback fleet; clamps inputs (battery/signal 0–100) to prevent UI overflow. | For 10k robots, pagination/backpressure will be required (future work). |
+| Tolerance Stack-up | Default telemetry, coordinates, and health values ensure consistent layout even when backend fields are missing; selectors synchronize state to avoid null-detail view. | Additional responsive CSS needed for sub-600 px widths. |
+| Signal Integrity | All communication via HTTPS `fetch` with bearer token; no binary streaming. Deterministic insight generator avoids jitter while offline. | Future enhancements could add WebSocket updates with throttling. |
+| Reliability (MTTF/MTBF) | UI prioritizes perceived uptime by swapping to mock data when API fails; refresh timestamp signals last successful sync. Actual robot MTBF tracked server-side; console simply displays metrics. | Add stale-data indicators if telemetry age exceeds threshold. |
+| FMEA Snapshot | **Failure mode:** API unavailable → **Effect:** empty fleet → **Mitigation:** `useFallbackFleet` + badge. <br> **Failure mode:** Missing health/map fields → **Effect:** blank panels → **Mitigation:** `withHealthDefaults` + `ensureMapDefaultsForRobot`. <br> **Failure mode:** Token expiry → **Effect:** repeated 401 → **Mitigation:** `forceLogout`. |
+
+| Dimension | Considerations |
+| --- | --- |
+| Tolerance Stack-up (UI) | Panel padding/margins guarantee readable stats grid; manipulator sliders clamp to safe angles. |
+| Signal Integrity (telemetry) | Numeric conversions validated client-side; command payloads sanitized via `JSON.stringify`. |
+| Reliability Metrics | While hardware MTTF/MTBF require backend data, UI displays heartbeats and path logs to estimate activity; fallback ensures dashboard uptime ~100 % even when upstream data missing. |
+| WCA for Map Path | Fixed Bangalore waypoints cap path length and geofence radius, preventing Leaflet performance issues. |
+| FMEA (detailed) | 1) **Selector mismatch** – detail panel empty → re-render ensures selected id exists. 2) **OTA failure simulation** – progress bar stuck → failure class toggled + log entry. 3) **Manipulator command without robot** – inline error message prevents API call. |
