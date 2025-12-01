@@ -141,7 +141,14 @@ const ONLINE_SUBSTATE_SET = new Set(ONLINE_SUBSTATE_OPTIONS.map((option) => opti
 const OFFLINE_SUBSTATE_SET = new Set(OFFLINE_SUBSTATE_OPTIONS.map((option) => option.value));
 
 const MOCK_MODELS = ['Atlas Heavy', 'Scout Rover', 'Payload Lifter', 'Sentinel Drone', 'Surveyor XR'];
-const MOCK_LOCATIONS = ['Charging Dock', 'Sector 7B', 'Warehouse Bay', 'North Runway', 'Hangar 3', 'Flooded Mine'];
+const MOCK_LOCATIONS = [
+  'MG Road, Bengaluru',
+  'Indiranagar, Bengaluru',
+  'Whitefield, Bengaluru',
+  'Electronic City, Bengaluru',
+  'Hebbal, Bengaluru',
+  'Peenya, Bengaluru'
+];
 const MOCK_MISSIONS = ['Perimeter Patrol', 'Cargo Transfer', 'Pipeline Inspection', 'Thermal Sweep', 'Rescue Standby'];
 const MOCK_NOTES = [
   'Verified joint calibration before shift.',
@@ -157,11 +164,18 @@ const MOCK_COMMAND_VALUES = {
   ota: ['firmware-check', 'ota-start', 'verify-version'],
   safety: ['estop-reset', 'clear-fault', 'enable-remote']
 };
+const BANGALORE_BASE = { lat: 12.9716, lng: 77.5946 };
+const BANGALORE_COORD_SPREAD = 0.045;
+const BANGALORE_PATH_SPREAD = 0.02;
 
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const randomItem = (array = []) => array[randomInt(0, Math.max(array.length - 1, 0))];
 const randomOffset = (spread = 0.25) => Number(((Math.random() - 0.5) * spread).toFixed(4));
 const generateMockId = (index) => `mock-${index}-${Math.random().toString(16).slice(2, 8)}`;
+const randomGeoPoint = (base = BANGALORE_BASE, spread = BANGALORE_COORD_SPREAD) => ({
+  lat: Number((base.lat + randomOffset(spread)).toFixed(5)),
+  lng: Number((base.lng + randomOffset(spread)).toFixed(5))
+});
 
 const createMockCommandLog = (count = 3) =>
   Array.from({ length: count }, (_, index) => {
@@ -173,12 +187,76 @@ const createMockCommandLog = (count = 3) =>
     };
   });
 
+const buildMockPath = (anchorPoint = randomGeoPoint()) => {
+  const firstPoint = randomGeoPoint(anchorPoint, BANGALORE_PATH_SPREAD);
+  return [
+    { ...firstPoint, timestamp: new Date(Date.now() - 600000).toISOString() },
+    { ...anchorPoint, timestamp: new Date(Date.now() - 120000).toISOString() }
+  ];
+};
+
+const createMockSeries = (length, base) =>
+  Array.from({ length }, (_, t) => ({
+    t,
+    value: Number((base + Math.sin(t / 2) * base * 0.35 + Math.random() * 0.6).toFixed(2))
+  }));
+
+const createMockInsights = (robot, index = 0) => {
+  const anchorLocation = robot.insightsLocation || randomGeoPoint();
+  const path = buildMockPath(anchorLocation);
+  const lastKnownLocation = { ...anchorLocation };
+  path[path.length - 1] = { ...lastKnownLocation, timestamp: new Date().toISOString() };
+  const currentVersion = `v2.${(index % 4) + 1}.0`;
+  return {
+    telemetry: {
+      timestamp: new Date().toISOString()
+    },
+    map: {
+      lastKnownLocation,
+      path,
+      geofences: [
+        {
+          lat: lastKnownLocation.lat,
+          lng: lastKnownLocation.lng,
+          radius: randomInt(180, 380)
+        }
+      ]
+    },
+    kinematics: {
+      velocitySeries: createMockSeries(6, randomInt(2, 6)),
+      accelerationSeries: createMockSeries(6, randomInt(1, 3))
+    },
+    health: {
+      motorTemp: randomInt(32, 68),
+      cpuUsage: randomInt(24, 88),
+      batteryCycles: randomInt(120, 940),
+      diagnostics: [
+        { name: 'Manipulator torque', status: 'ok' },
+        { name: 'Vision system', status: randomItem(['ok', 'warn']) },
+        { name: 'Power bus', status: 'ok' }
+      ],
+      alerts: index % 2 === 0 ? [] : ['Minor slip detected near test pad']
+    },
+    ota: {
+      currentVersion,
+      availableVersion: currentVersion,
+      lastUpdated: new Date(Date.now() - randomInt(1, 24) * 3600000).toISOString(),
+      status: 'success'
+    },
+    firmwareHistory: [
+      { version: currentVersion, appliedAt: new Date(Date.now() - 86400000).toISOString() },
+      { version: 'v2.0.0', appliedAt: new Date(Date.now() - 86400000 * 15).toISOString() }
+    ]
+  };
+};
+
 const createMockRobot = (index) => {
   const isOnline = Math.random() > 0.25;
   const status = isOnline ? 'online' : 'offline';
   const subStatus = randomItem(isOnline ? ONLINE_SUBSTATE_OPTIONS : OFFLINE_SUBSTATE_OPTIONS)?.value ?? 'idle';
   const hackNumber = clamp(randomInt(index + 1, index + 200), HACK_MIN, HACK_MAX);
   const hackName = `${HACK_PREFIX}${hackNumber.toString().padStart(4, '0')}`;
+  const anchorLocation = randomGeoPoint();
   return {
     id: generateMockId(index),
     name: hackName,
@@ -200,10 +278,7 @@ const createMockRobot = (index) => {
     },
     notes: randomItem(MOCK_NOTES),
     recentCommands: createMockCommandLog(randomInt(1, 4)),
-    insightsLocation: {
-      lat: 37.7749 + randomOffset(0.3),
-      lng: -122.4194 + randomOffset(0.3)
-    }
+    insightsLocation: anchorLocation
   };
 };
 
@@ -328,7 +403,16 @@ const applyRobotsToState = (robots = [], { fallback = false } = {}) => {
 };
 
 const useFallbackFleet = (count) => {
-  applyRobotsToState(generateMockFleet(count ?? randomInt(5, 8)), { fallback: true });
+  const mockRobots = generateMockFleet(count ?? randomInt(5, 8));
+  applyRobotsToState(mockRobots, { fallback: true });
+  state.insights = state.robots.reduce((acc, robot, index) => {
+    const mockInsight = createMockInsights(robot, index);
+    acc[robot.id] = mockInsight;
+    state.robots[index] = { ...robot, insightsLocation: mockInsight.map?.lastKnownLocation };
+    return acc;
+  }, {});
+  renderFleetList();
+  renderDetail();
 };
 
 const buildStatsRows = (stats) => {
@@ -694,7 +778,14 @@ const loadRobots = async () => {
 };
 
 const loadInsightsForRobot = async (robotId) => {
-  if (!auth.token || !robotId) {
+  if (!robotId) {
+    return;
+  }
+  if (state.isFallbackFleet) {
+    renderInsights();
+    return;
+  }
+  if (!auth.token) {
     return;
   }
   try {
