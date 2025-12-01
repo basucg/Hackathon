@@ -471,9 +471,9 @@ const formatPathPointLabel = (point) => {
 };
 
 const buildFallbackMapSvg = (path, center, geofences = []) => {
-  const width = 420;
-  const height = 280;
-  const padding = 24;
+  const width = 360;
+  const height = 220;
+  const padding = 20;
   const lats = path.map((pt) => pt.lat);
   const lngs = path.map((pt) => pt.lng);
   const minLat = Math.min(...lats, center.lat);
@@ -501,17 +501,11 @@ const buildFallbackMapSvg = (path, center, geofences = []) => {
       })()
     : '';
   return `
-    <svg class="fallback-map" viewBox="0 0 ${width} ${height}" role="img" aria-label="Fallback navigation path">
-      <defs>
-        <linearGradient id="fallbackMapBg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#0f172a" stop-opacity="0.95"/>
-          <stop offset="100%" stop-color="#1e293b" stop-opacity="0.9"/>
-        </linearGradient>
-      </defs>
-      <rect width="${width}" height="${height}" rx="18" fill="url(#fallbackMapBg)" stroke="rgba(148,163,184,0.4)"/>
-      <polyline points="${polyline.join(' ')}" fill="none" stroke="#4cc9f0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <svg class="fallback-map" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Fallback navigation path">
+      <rect width="${width}" height="${height}" rx="16" fill="rgba(15,23,42,0.9)" stroke="rgba(148,163,184,0.35)"/>
+      <polyline points="${polyline.join(' ')}" fill="none" stroke="#4cc9f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       ${geofenceCircle}
-      <circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="6" fill="#f72585" stroke="#fff" stroke-width="2"/>
+      <circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="5" fill="#f72585" stroke="#fff" stroke-width="1.5"/>
     </svg>
   `;
 };

@@ -535,10 +535,16 @@ p {
   height: 260px;
   border-radius: 12px;
   margin-top: 0.5rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.8));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .fallback-map {
   width: 100%;
+  max-width: 320px;
   height: auto;
   display: block;
 }
