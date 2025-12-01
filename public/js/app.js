@@ -1143,53 +1143,64 @@ const setActiveTab = (tab) => {
 };
 
 const renderMapPanel = (insights) => {
-  if (!selectors.mapView || !window.L || !insights?.map) return;
-  const geofences = insights.map.geofences;
+  if (!insights?.map) {
+    if (selectors.pathLogList) {
+      selectors.pathLogList.innerHTML = '<li>No navigation history available.</li>';
+    }
+    return;
+  }
   const path = ensurePathPoints(insights.map.path);
   const lastKnownLocation = insights.map.lastKnownLocation || path[path.length - 1];
-  if (!mapState.map) {
-    mapState.map = window.L.map('map-view');
-    mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(mapState.map);
-  }
-  mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
-  if (mapState.pathLayer) {
-    mapState.map.removeLayer(mapState.pathLayer);
-  }
-  mapState.pathLayer = window.L.polyline(
-    path.map((point) => [point.lat, point.lng]),
-    { color: '#4cc9f0' }
-  ).addTo(mapState.map);
+  const geofences = insights.map.geofences;
 
-  if (mapState.marker) {
-    mapState.map.removeLayer(mapState.marker);
-  }
-  mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
+  if (selectors.mapView && window.L) {
+    if (!mapState.map) {
+      mapState.map = window.L.map('map-view');
+      mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(mapState.map);
+    }
+    mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
+    if (mapState.pathLayer) {
+      mapState.map.removeLayer(mapState.pathLayer);
+    }
+    mapState.pathLayer = window.L.polyline(
+      path.map((point) => [point.lat, point.lng]),
+      { color: '#4cc9f0' }
+    ).addTo(mapState.map);
 
-  if (mapState.geofenceLayer) {
-    mapState.map.removeLayer(mapState.geofenceLayer);
-  }
-  if (geofences?.length) {
-    const fence = geofences[0];
-    mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
-      radius: fence.radius,
-      color: '#f72585',
-      fillOpacity: 0.08
-    }).addTo(mapState.map);
+    if (mapState.marker) {
+      mapState.map.removeLayer(mapState.marker);
+    }
+    mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
+
+    if (mapState.geofenceLayer) {
+      mapState.map.removeLayer(mapState.geofenceLayer);
+    }
+    if (geofences?.length) {
+      const fence = geofences[0];
+      mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
+        radius: fence.radius,
+        color: '#f72585',
+        fillOpacity: 0.08
+      }).addTo(mapState.map);
+    }
+
+    setTimeout(() => mapState.map.invalidateSize(), 250);
   }
 
-  selectors.pathLogList.innerHTML = path
-    .slice()
-    .reverse()
-    .map(
-      (point) =>
-        `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${formatPathPointLabel(point)}</li>`
-    )
-    .join('');
-
-  setTimeout(() => mapState.map.invalidateSize(), 250);
+  if (selectors.pathLogList) {
+    const logEntries = path
+      .slice()
+      .reverse()
+      .map(
+        (point) =>
+          `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${formatPathPointLabel(point)}</li>`
+      )
+      .join('');
+    selectors.pathLogList.innerHTML = logEntries || '<li>No navigation history available.</li>';
+  }
 };
 
 const renderCharts = (insights) => {
