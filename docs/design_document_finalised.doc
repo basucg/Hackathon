@@ -1,0 +1,122 @@
+# Robot Management Console – Azure & MongoDB Deployment Design
+
+## 1. Objective
+Extend the existing console so it runs on Azure infrastructure, persists data in MongoDB (Azure Cosmos DB – Mongo API or dedicated VM), and ships as a containerized service with CI/CD.
+
+## 2. Target Architecture
+```
++---------------------+        HTTPS        +------------------+
+| SPA (static assets) |  <--------------->  |  Node/Express    |
+| Azure Static Web App|                    |  Container (ACI)  |
++---------------------+                    +------------------+
+                                                  |
+                                                  v
+                                        +------------------+
+                                        | MongoDB (Cosmos) |
+                                        +------------------+
+```
+- **Frontend:** Deployed to Azure Static Web Apps (or hosted by Express via container if preferred).
+- **Backend:** Node/Express packaged as Docker image → stored in Azure Container Registry (ACR) → executed on Azure App Service for Containers or Azure Container Apps.
+- **Database:** MongoDB-compatible service (Cosmos DB with Mongo API or managed VM).
+- **Secrets & Config:** Azure Key Vault or App Service settings for Mongo connection string, JWT secrets, OTA keys.
+
+## 3. Containerization Plan
+1. **Dockerfile**
+   - Base: `node:20-alpine`.
+   - Copy `package*.json`, run `npm ci`.
+   - Copy `src`, `public`, `docs`, etc.
+   - Build (if bundling frontend) or serve static as-is.
+   - Expose `PORT` env; default 3000.
+   - `CMD ["npm", "start"]` or `node src/server.js`.
+2. **Docker Compose (local)**
+   - Services: `api` (Express), `mongo` (MongoDB image), optionally `mongo-express` for inspection.
+3. **ACR Push**
+   - `az acr build` or GitHub Action to build/push image to ACR.
+
+## 4. MongoDB Integration
+### 4.1 Driver & Config
+- Install `mongodb` or `mongoose`.
+- Add `config/database.js` to create a reusable connection using `MONGO_URI` env var.
+- Use connection pooling; handle SIGTERM for graceful shutdown inside containers.
+
+### 4.2 Repository Refactor
+Replace better-sqlite3 usage with Mongo collections:
+- `robots` collection: document schema `{ _id, name, identifier, model, batteryLevel, status, subStatus, metrics, location, mission, lastHeartbeat, notes, firmwareVersion }`.
+- `robot_commands` collection: `{ _id, robotId, type, value, metadata, issuedAt }`.
+- `users`, `sessions`, `firmware_history` collections similar to existing tables.
+- Implement indexes: `robots.identifier`, `robot_commands.robotId`, `sessions.token`.
+
+### 4.3 Seed & Fallback
+- On startup, `robots.countDocuments()`; if zero, insert `defaultRobots` dataset.
+- Maintain fallback/mock data generator but only used client-side when API unavailable.
+
+### 4.4 Transactions & Consistency
+- Use MongoDB transactions (requires replica set) when updating robot + command log simultaneously.
+- Alternatively, perform two-phase write with acknowledgment logging.
+
+## 5. Azure Hosting Strategy
+### 5.1 Backend
+- **Option A: Azure App Service for Containers**
+  - Deploy container from ACR.
+  - Configure startup command, health probes.
+- **Option B: Azure Container Apps**
+  - Use revision-based deploys, autoscaling on HTTP/CPU.
+- **Monitoring:** Enable Application Insights for logs/metrics; set `APPINSIGHTS_INSTRUMENTATIONKEY`.
+
+### 5.2 Database (Cosmos DB Mongo API)
+- Provision Cosmos DB account (Mongo API), throughput autoscale.
+- Connection string stored in Key Vault; grant managed identity to App Service/Container Apps.
+- Configure firewall/VNet integration for private access if required.
+
+### 5.3 Frontend
+- Option A: Serve static assets from Express container (no change).
+- Option B: Build SPA separately and deploy to Azure Static Web Apps; set environment variables for API base URL.
+
+## 6. CI/CD Pipeline
+1. **Source:** GitHub repo.
+2. **Pipeline:** GitHub Actions or Azure DevOps.
+   - Steps: lint/tests → build Docker image → push to ACR → deploy to App Service/Container Apps.
+   - Frontend build artifact deployed to Static Web Apps if split.
+3. **Configuration:** Use environment-specific workflows (`dev`, `staging`, `prod`) with different Mongo URIs and scaling settings.
+
+## 7. Runtime Configuration
+| Setting | Description | Source |
+| --- | --- | --- |
+| `MONGO_URI` | Cosmos/Mongo connection string | Key Vault or App Service setting |
+| `DB_NAME` | Database name (e.g., `robot_console`) | App config |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Default admin credentials | Key Vault secret |
+| `JWT_SECRET` | Token signing secret | Key Vault |
+| `AZURE_APPINSIGHTS_KEY` | Monitoring | App config |
+| `PORT` | Container port | App Service setting |
+
+## 8. Security & Networking
+- Enable Managed Identity for backend container; grant access to Key Vault + Cosmos DB (RBAC).
+- Use Azure Front Door or Application Gateway for HTTPS termination and WAF.
+- Restrict Cosmos DB to VNet; integrate App Service with VNet (VNet Integration).
+- Store secrets solely in Key Vault; mount via Azure Key Vault references or fetch at startup.
+
+## 9. Observability
+- Application Insights for request traces, dependency tracking (Mongo), custom metrics (robot count, fallback usage).
+- Azure Monitor alerts on error rate, response time, CPU, memory.
+- Log retention policy (30–90 days) with export to Blob Storage.
+
+## 10. Migration Steps
+1. **Schema Mapping:** Define Mongo schemas matching existing SQLite fields.
+2. **Data Export:** Export SQLite tables to JSON; run migration script to insert into Mongo.
+3. **Dual Environment:** Deploy staging container with Mongo backend; run regression tests.
+4. **Cutover:** Update production config to point to Cosmos/Mongo; redeploy container.
+5. **Validation:** Monitor Application Insights, verify API endpoints, run UI smoke tests.
+
+## 11. Risks & Mitigations
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| Mongo query inefficiencies | Higher latency/cost | Add indexes, use projections, monitor with profiler |
+| Secret leakage | Compromised DB | Use Key Vault, managed identities, rotate keys |
+| Container cold starts | Latency spikes | Use premium App Service plan or warmup slots |
+| Cosmos throughput limits | Rate limiting/429 | Enable autoscale, monitor RU consumption |
+
+## 12. Future Enhancements
+- Multi-region Cosmos DB + Azure Traffic Manager for geo-redundancy.
+- Event-driven telemetry ingestion via Azure Event Hubs/Functions.
+- Automated schema migrations using tools like `migrate-mongo`.
+- Canary deployments with Container Apps revisions.

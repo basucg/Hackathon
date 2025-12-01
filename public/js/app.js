@@ -2,7 +2,8 @@ const state = {
   robots: [],
   selectedRobotId: null,
   activeTab: 'overview',
-  insights: {}
+  insights: {},
+  isFallbackFleet: false
 };
 
 const auth = {
@@ -15,7 +16,8 @@ const mapState = {
   tileLayer: null,
   pathLayer: null,
   marker: null,
-  geofenceLayer: null
+  geofenceLayer: null,
+  markers: []
 };
 
 const chartState = {
@@ -35,6 +37,7 @@ const selectors = {
   logoutButton: document.getElementById('logout-btn'),
   fleetList: document.getElementById('fleet-list'),
   fleetCount: document.getElementById('fleet-count'),
+  fleetSelector: document.getElementById('fleet-selector'),
   refreshButton: document.getElementById('refresh-btn'),
   lastRefresh: document.getElementById('last-refresh'),
   detailContent: document.getElementById('detail-content'),
@@ -47,7 +50,10 @@ const selectors = {
   statusForm: document.getElementById('status-form'),
   batteryInput: document.getElementById('battery-input'),
   signalInput: document.getElementById('signal-input'),
+  powerStateInput: document.getElementById('power-state-input'),
+  powerSubstateInput: document.getElementById('power-substate-input'),
   locationInput: document.getElementById('location-input'),
+  missionInput: document.getElementById('mission-input'),
   notesInput: document.getElementById('notes-input'),
   tasksInput: document.getElementById('tasks-input'),
   uptimeInput: document.getElementById('uptime-input'),
@@ -135,6 +141,171 @@ const OFFLINE_SUBSTATE_OPTIONS = [
 const ONLINE_SUBSTATE_SET = new Set(ONLINE_SUBSTATE_OPTIONS.map((option) => option.value));
 const OFFLINE_SUBSTATE_SET = new Set(OFFLINE_SUBSTATE_OPTIONS.map((option) => option.value));
 
+const MOCK_MODELS = ['Atlas Heavy', 'Scout Rover', 'Payload Lifter', 'Sentinel Drone', 'Surveyor XR'];
+const MOCK_LOCATIONS = [
+  'MG Road, Bengaluru',
+  'Indiranagar, Bengaluru',
+  'Whitefield, Bengaluru',
+  'Electronic City, Bengaluru',
+  'Hebbal, Bengaluru',
+  'Peenya, Bengaluru'
+];
+const MOCK_MISSIONS = ['Perimeter Patrol', 'Cargo Transfer', 'Pipeline Inspection', 'Thermal Sweep', 'Rescue Standby'];
+const MOCK_NOTES = [
+  'Verified joint calibration before shift.',
+  'Awaiting replacement lidar module.',
+  'Power cycled after thermal warning cleared.',
+  'Operator reported slight drift near dock.',
+  'Ready for OTA validation sequence.'
+];
+const MOCK_COMMAND_TYPES = ['navigate', 'manipulator', 'ota', 'safety'];
+const MOCK_COMMAND_VALUES = {
+  navigate: ['waypoint-alpha', 'sector-7', 'grid-c3', 'return-home'],
+  manipulator: ['joint-update', 'grip-hold', 'grip-release'],
+  ota: ['firmware-check', 'ota-start', 'verify-version'],
+  safety: ['estop-reset', 'clear-fault', 'enable-remote']
+};
+const BANGALORE_BASE = { lat: 12.9716, lng: 77.5946 };
+const BANGALORE_NAV_PATH = [
+  { label: 'Cubbon Park', lat: 12.9776, lng: 77.5993 },
+  { label: 'MG Road', lat: 12.9716, lng: 77.5946 },
+  { label: 'Koramangala', lat: 12.9352, lng: 77.6245 },
+  { label: 'Whitefield', lat: 12.9836, lng: 77.7278 },
+  { label: 'Yeshwanthpur', lat: 13.0285, lng: 77.5417 }
+];
+const BANGALORE_DEFAULT_GEOFENCE_RADIUS = 260;
+const DEFAULT_HEALTH_TEMPLATE = {
+  motorTemp: 48,
+  cpuUsage: 36,
+  batteryCycles: 512,
+  diagnostics: [
+    { name: 'Manipulator torque', status: 'ok' },
+    { name: 'Power bus', status: 'ok' },
+    { name: 'Vision system', status: 'ok' }
+  ],
+  alerts: []
+};
+
+const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randomItem = (array = []) => array[randomInt(0, Math.max(array.length - 1, 0))];
+const generateMockId = (index) => `mock-${index}-${Math.random().toString(16).slice(2, 8)}`;
+
+const cloneDefaultHealth = () => ({
+  motorTemp: DEFAULT_HEALTH_TEMPLATE.motorTemp,
+  cpuUsage: DEFAULT_HEALTH_TEMPLATE.cpuUsage,
+  batteryCycles: DEFAULT_HEALTH_TEMPLATE.batteryCycles,
+  diagnostics: DEFAULT_HEALTH_TEMPLATE.diagnostics.map((diag) => ({ ...diag })),
+  alerts: [...DEFAULT_HEALTH_TEMPLATE.alerts]
+});
+
+const withHealthDefaults = (health = {}) => ({
+  motorTemp: health.motorTemp ?? DEFAULT_HEALTH_TEMPLATE.motorTemp,
+  cpuUsage: health.cpuUsage ?? DEFAULT_HEALTH_TEMPLATE.cpuUsage,
+  batteryCycles: health.batteryCycles ?? DEFAULT_HEALTH_TEMPLATE.batteryCycles,
+  diagnostics:
+    Array.isArray(health.diagnostics) && health.diagnostics.length
+      ? health.diagnostics
+      : DEFAULT_HEALTH_TEMPLATE.diagnostics.map((diag) => ({ ...diag })),
+  alerts: Array.isArray(health.alerts) ? health.alerts : [...DEFAULT_HEALTH_TEMPLATE.alerts]
+});
+
+const createMockCommandLog = (count = 3) =>
+  Array.from({ length: count }, (_, index) => {
+    const type = randomItem(MOCK_COMMAND_TYPES);
+    return {
+      type,
+      value: randomItem(MOCK_COMMAND_VALUES[type]),
+      issuedAt: new Date(Date.now() - randomInt(index + 1, index + 5) * 60000).toISOString()
+    };
+  });
+
+const buildMockPath = () =>
+  BANGALORE_NAV_PATH.map((point, index, points) => ({
+    lat: Number(point.lat.toFixed(5)),
+    lng: Number(point.lng.toFixed(5)),
+    label: point.label,
+    timestamp: new Date(Date.now() - (points.length - index) * 300000).toISOString()
+  }));
+
+const createMockSeries = (length, base) =>
+  Array.from({ length }, (_, t) => ({
+    t,
+    value: Number((base + Math.sin(t / 2) * base * 0.35 + Math.random() * 0.6).toFixed(2))
+  }));
+
+const createMockInsights = (robot, index = 0) => {
+  const path = buildMockPath();
+  const lastPoint = path[path.length - 1];
+  const lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+  path[path.length - 1] = { ...path[path.length - 1], timestamp: new Date().toISOString() };
+  const currentVersion = `v2.${(index % 4) + 1}.0`;
+  return {
+    telemetry: {
+      timestamp: new Date().toISOString()
+    },
+    map: {
+      lastKnownLocation,
+      path,
+      geofences: [
+        {
+          lat: lastKnownLocation.lat,
+          lng: lastKnownLocation.lng,
+          radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
+        }
+      ]
+    },
+    kinematics: {
+      velocitySeries: createMockSeries(6, randomInt(2, 6)),
+      accelerationSeries: createMockSeries(6, randomInt(1, 3))
+    },
+    health: withHealthDefaults(),
+    ota: {
+      currentVersion,
+      availableVersion: currentVersion,
+      lastUpdated: new Date(Date.now() - randomInt(1, 24) * 3600000).toISOString(),
+      status: 'success'
+    },
+    firmwareHistory: [
+      { version: currentVersion, appliedAt: new Date(Date.now() - 86400000).toISOString() },
+      { version: 'v2.0.0', appliedAt: new Date(Date.now() - 86400000 * 15).toISOString() }
+    ]
+  };
+};
+
+const createMockRobot = (index) => {
+  const isOnline = Math.random() > 0.25;
+  const status = isOnline ? 'online' : 'offline';
+  const subStatus = randomItem(isOnline ? ONLINE_SUBSTATE_OPTIONS : OFFLINE_SUBSTATE_OPTIONS)?.value ?? 'idle';
+  const hackNumber = clamp(randomInt(index + 1, index + 200), HACK_MIN, HACK_MAX);
+  const hackName = `${HACK_PREFIX}${hackNumber.toString().padStart(4, '0')}`;
+  const anchorLocation = { ...BANGALORE_NAV_PATH[BANGALORE_NAV_PATH.length - 1] };
+  return {
+    id: generateMockId(index),
+    name: hackName,
+    identifier: hackName,
+    hackName,
+    status,
+    subStatus,
+    operationStatus: subStatus,
+    model: randomItem(MOCK_MODELS),
+    batteryLevel: randomInt(32, 98),
+    temperatureC: randomInt(24, 70),
+    signalStrength: randomInt(isOnline ? 62 : 12, 100),
+    location: randomItem(MOCK_LOCATIONS),
+    mission: randomItem(MOCK_MISSIONS),
+    lastHeartbeat: new Date(Date.now() - randomInt(1, 90) * 60000).toISOString(),
+    metrics: {
+      tasksCompleted: randomInt(24, 620),
+      uptimeHours: randomInt(120, 2400)
+    },
+    notes: randomItem(MOCK_NOTES),
+    recentCommands: createMockCommandLog(randomInt(1, 4)),
+    insightsLocation: anchorLocation
+  };
+};
+
+const generateMockFleet = (count = 6) => Array.from({ length: count }, (_, index) => createMockRobot(index));
+
 const parseHackNumber = (value = '') => {
   const match = HACK_PATTERN.exec(value);
   if (!match) {
@@ -175,6 +346,230 @@ const formatTemperature = (value) => (value !== undefined ? `${value} °C` : '�
 const formatUptime = (value) => (value !== undefined ? `${value} h` : '—');
 const degreesLabel = (value) => `${Math.round(value)}°`;
 
+const normalizeRobot = (robot = {}, index = 0) => {
+  const hackName = ensureHackName(robot, index);
+  const resolvedSubstate = robot.subStatus || robot.operationStatus || 'idle';
+  const resolvedStatus =
+    robot.status || (OFFLINE_SUBSTATE_SET.has(resolvedSubstate) ? 'offline' : 'online');
+  return {
+    id: robot.id ?? `${hackName}-${index}`,
+    name: robot.name ?? hackName,
+    identifier: robot.identifier ?? hackName,
+    hackName,
+    model: robot.model ?? 'Multi-role',
+    batteryLevel: robot.batteryLevel ?? 100,
+    signalStrength: robot.signalStrength ?? 100,
+    status: resolvedStatus,
+    subStatus: resolvedSubstate,
+    operationStatus: robot.operationStatus ?? resolvedSubstate,
+    location: robot.location ?? '—',
+    mission: robot.mission ?? 'Standby',
+    lastHeartbeat: robot.lastHeartbeat ?? new Date().toISOString(),
+    metrics: {
+      tasksCompleted: robot.metrics?.tasksCompleted ?? 0,
+      uptimeHours: robot.metrics?.uptimeHours ?? 0
+    },
+    temperatureC: robot.temperatureC ?? 0,
+    notes: robot.notes ?? '',
+    recentCommands: Array.isArray(robot.recentCommands) ? robot.recentCommands : [],
+    insightsLocation: robot.insightsLocation
+  };
+};
+
+const deriveConnectivity = (robot = {}) => {
+  const status = robot.status ?? 'online';
+  const substate = robot.subStatus ?? robot.operationStatus ?? (status === 'online' ? 'idle' : 'shutdown');
+  return {
+    status,
+    substate,
+    isOnline: status === 'online'
+  };
+};
+
+const setSubstateOptions = (status = 'online', selectedValue) => {
+  if (!selectors.powerSubstateInput) return;
+  const options = getSubstateOptions(status);
+  selectors.powerSubstateInput.innerHTML = '';
+  options.forEach((option) => {
+    const opt = document.createElement('option');
+    opt.value = option.value;
+    opt.textContent = option.label;
+    selectors.powerSubstateInput.appendChild(opt);
+  });
+  if (selectedValue && options.some((option) => option.value === selectedValue)) {
+    selectors.powerSubstateInput.value = selectedValue;
+  } else if (options[0]) {
+    selectors.powerSubstateInput.value = options[0].value;
+  }
+};
+
+const syncPowerInputs = (robot) => {
+  if (!selectors.powerStateInput || !selectors.powerSubstateInput || !robot) return;
+  const connectivity = deriveConnectivity(robot);
+  const stateValue = connectivity.isOnline ? 'online' : 'offline';
+  selectors.powerStateInput.value = stateValue;
+  setSubstateOptions(stateValue, connectivity.substate);
+};
+
+const applyRobotsToState = (robots = [], { fallback = false } = {}) => {
+  state.robots = robots.map((robot, index) => normalizeRobot(robot, index));
+  state.isFallbackFleet = fallback;
+  if (state.selectedRobotId && !state.robots.some((robot) => robot.id === state.selectedRobotId)) {
+    state.selectedRobotId = null;
+  }
+  if (!state.selectedRobotId && state.robots.length) {
+    state.selectedRobotId = state.robots[0].id;
+  }
+  renderFleetList();
+  renderDetail();
+};
+
+const useFallbackFleet = (count) => {
+  const mockRobots = generateMockFleet(count ?? randomInt(5, 8));
+  applyRobotsToState(mockRobots, { fallback: true });
+  state.insights = state.robots.reduce((acc, robot, index) => {
+    const mockInsight = createMockInsights(robot, index);
+    acc[robot.id] = mockInsight;
+    state.robots[index] = { ...robot, insightsLocation: mockInsight.map?.lastKnownLocation };
+    return acc;
+  }, {});
+  renderFleetList();
+  renderDetail();
+};
+
+const buildDefaultMapSnapshot = () => {
+  const path = buildMockPath();
+  const lastPoint = path[path.length - 1];
+  const lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+  return {
+    lastKnownLocation,
+    path,
+    geofences: [
+      {
+        lat: lastKnownLocation.lat,
+        lng: lastKnownLocation.lng,
+        radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
+      }
+    ]
+  };
+};
+
+const ensurePathPoints = (path) => {
+  const basePath = Array.isArray(path) && path.length ? path : buildMockPath();
+  return basePath.map((point, index) => ({
+    ...point,
+    lat: Number(point.lat.toFixed(5)),
+    lng: Number(point.lng.toFixed(5)),
+    timestamp:
+      point.timestamp ||
+      new Date(Date.now() - (basePath.length - index) * 300000).toISOString()
+  }));
+};
+
+const formatPathPointLabel = (point) => {
+  const coords = `${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}`;
+  return point.label ? `${point.label} · ${coords}` : coords;
+};
+
+const FALLBACK_ZOOM = 13;
+const lonToTile = (lon, zoom) => Math.floor(((lon + 180) / 360) * 2 ** zoom);
+const latToTile = (lat, zoom) =>
+  Math.floor(
+    ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) *
+      2 ** zoom
+  );
+const tileToLon = (x, zoom) => (x / 2 ** zoom) * 360 - 180;
+const tileToLat = (y, zoom) => {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** zoom;
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+};
+
+const buildFallbackMapMarkup = (path, center, geofences = []) => {
+  const width = 360;
+  const height = 220;
+  const tileX = lonToTile(center.lng, FALLBACK_ZOOM);
+  const tileY = latToTile(center.lat, FALLBACK_ZOOM);
+  const lonLeft = tileToLon(tileX, FALLBACK_ZOOM);
+  const lonRight = tileToLon(tileX + 1, FALLBACK_ZOOM);
+  const latTop = tileToLat(tileY, FALLBACK_ZOOM);
+  const latBottom = tileToLat(tileY + 1, FALLBACK_ZOOM);
+  const tileUrl = `https://tile.openstreetmap.org/${FALLBACK_ZOOM}/${tileX}/${tileY}.png`;
+
+  const project = (pt) => ({
+    x: ((pt.lng - lonLeft) / (lonRight - lonLeft)) * width,
+    y: ((latTop - pt.lat) / (latTop - latBottom)) * height
+  });
+
+  const polylinePoints = path
+    .map((pt) => {
+      const { x, y } = project(pt);
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  const centerPoint = project(center);
+  const geofenceCircle = geofences?.length
+    ? (() => {
+        const radiusMeters = geofences[0].radius ?? BANGALORE_DEFAULT_GEOFENCE_RADIUS;
+        const metersPerDegreeLat = 111320;
+        const radiusLat = radiusMeters / metersPerDegreeLat;
+        const radiusSvg = ((radiusLat / (latTop - latBottom)) * height) || 14;
+        return `<circle cx="${centerPoint.x}" cy="${centerPoint.y}" r="${radiusSvg}" fill="rgba(247,37,133,0.12)" stroke="#f72585" stroke-width="1" />`;
+      })()
+    : '';
+
+  const markerTags = path
+    .map((point, index) => {
+      const { x, y } = project(point);
+      const isLast = index === path.length - 1;
+      const label = point.label || `${point.lat.toFixed(3)}, ${point.lng.toFixed(3)}`;
+      const offsetY = y - 10;
+      return `
+        <g>
+          <circle cx="${x}" cy="${y}" r="${isLast ? 5 : 4}" fill="${isLast ? '#f72585' : '#4cc9f0'}" stroke="#0f172a" stroke-width="1" />
+          <text x="${x}" y="${offsetY}" fill="#f8fafc" font-size="10" text-anchor="middle" font-weight="600" paint-order="stroke" stroke="#0f172a" stroke-width="1">${label}</text>
+        </g>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="fallback-map-img" style="background-image:url('${tileUrl}')">
+      <svg class="fallback-map-overlay" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Fallback navigation path">
+        <polyline points="${polylinePoints}" fill="none" stroke="#4cc9f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        ${geofenceCircle}
+        ${markerTags}
+      </svg>
+    </div>
+  `;
+};
+
+const ensureMapDefaultsForRobot = (robot) => {
+  if (!robot) return null;
+  const insights = state.insights[robot.id] ?? {};
+  if (!insights.map) {
+    insights.map = buildDefaultMapSnapshot();
+  }
+  insights.map.path = ensurePathPoints(insights.map.path);
+  if (!insights.map.lastKnownLocation) {
+    const lastPoint = insights.map.path[insights.map.path.length - 1];
+    insights.map.lastKnownLocation = { lat: lastPoint.lat, lng: lastPoint.lng };
+  }
+  if (!insights.map.geofences || !insights.map.geofences.length) {
+    const { lat, lng } = insights.map.lastKnownLocation;
+    insights.map.geofences = [
+      {
+        lat,
+        lng,
+        radius: BANGALORE_DEFAULT_GEOFENCE_RADIUS
+      }
+    ];
+  }
+  insights.health = withHealthDefaults(insights.health);
+  state.insights[robot.id] = insights;
+  return insights;
+};
+
 const buildStatsRows = (stats) => {
   if (!selectors.detailStats) return;
   selectors.detailStats.innerHTML = '';
@@ -202,12 +597,14 @@ const renderOverviewStats = (robot) => {
   const statusSummary = `${connectivity.isOnline ? 'Online' : 'Offline'} · ${formatSubstateLabel(
     connectivity.substate
   )}`;
-  const insightData = state.insights[robot.id] || {};
+  const insightData = ensureMapDefaultsForRobot(robot) || {};
+  const coordinates = insightData.map?.lastKnownLocation || robot.insightsLocation || BANGALORE_BASE;
+  robot.insightsLocation = coordinates;
   const telemetryTime = insightData.telemetry?.timestamp || robot.lastHeartbeat;
   const stats = [
     { label: 'Status', value: statusSummary },
     { label: 'Battery', value: formatPercent(robot.batteryLevel) },
-    { label: 'Location coordinates', value: formatCoordinates(robot.insightsLocation) },
+    { label: 'Location coordinates', value: formatCoordinates(coordinates) },
     { label: 'Heartbeat', value: formatHeartbeat(robot.lastHeartbeat) },
     { label: 'Location', value: robot.location || '—' },
     { label: 'Time', value: formatTimeOnly(telemetryTime) },
@@ -392,6 +789,33 @@ const selectRobot = (robotId) => {
   loadInsightsForRobot(robotId);
 };
 
+const renderFleetSelector = () => {
+  if (!selectors.fleetSelector) return;
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = 'Select robot';
+  placeholderOption.disabled = true;
+  placeholderOption.selected = !state.selectedRobotId;
+
+  selectors.fleetSelector.innerHTML = '';
+  selectors.fleetSelector.appendChild(placeholderOption);
+
+  state.robots.forEach((robot) => {
+    const option = document.createElement('option');
+    option.value = String(robot.id);
+    option.textContent = robot.hackName || robot.name;
+    if (state.selectedRobotId && robot.id === state.selectedRobotId) {
+      option.selected = true;
+    }
+    selectors.fleetSelector.appendChild(option);
+  });
+
+  selectors.fleetSelector.disabled = state.robots.length === 0;
+  if (state.selectedRobotId) {
+    selectors.fleetSelector.value = String(state.selectedRobotId);
+  }
+};
+
 const renderFleetList = () => {
   selectors.fleetList.innerHTML = '';
   state.robots.forEach((robot, index) => {
@@ -431,7 +855,11 @@ const renderFleetList = () => {
     state.selectedRobotId = state.robots[0]?.id ?? null;
   }
 
-  selectors.fleetCount.textContent = `${state.robots.length} robots available`;
+  renderFleetSelector();
+  const fleetLabel = state.isFallbackFleet
+    ? `${state.robots.length} demo robots ready`
+    : `${state.robots.length} robots available`;
+  selectors.fleetCount.textContent = fleetLabel;
 };
 
 const renderDetail = () => {
@@ -489,19 +917,32 @@ const loadRobots = async () => {
   selectors.refreshButton.disabled = true;
   try {
     const robots = await fetchRobots();
-    state.robots = robots.map((robot, index) => normalizeRobot(robot, index));
-    renderFleetList();
-    renderDetail();
+    if (Array.isArray(robots) && robots.length) {
+      applyRobotsToState(robots);
+    } else {
+      useFallbackFleet();
+    }
     updateTimestamp();
   } catch (error) {
     console.error('Failed to load robots', error); // eslint-disable-line no-console
+    if (!state.robots.length && auth.token) {
+      useFallbackFleet();
+      updateTimestamp();
+    }
   } finally {
     selectors.refreshButton.disabled = false;
   }
 };
 
 const loadInsightsForRobot = async (robotId) => {
-  if (!auth.token || !robotId) {
+  if (!robotId) {
+    return;
+  }
+  if (state.isFallbackFleet) {
+    renderInsights();
+    return;
+  }
+  if (!auth.token) {
     return;
   }
   try {
@@ -704,6 +1145,17 @@ selectors.themeToggle.addEventListener('change', (event) => {
     document.body.removeAttribute('data-theme');
   }
 });
+selectors.powerStateInput?.addEventListener('change', (event) => {
+  setSubstateOptions(event.target.value);
+});
+selectors.fleetSelector?.addEventListener('change', (event) => {
+  const { value } = event.target;
+  if (!value) return;
+  const robot = state.robots.find((entry) => String(entry.id) === value);
+  if (robot) {
+    selectRobot(robot.id);
+  }
+});
 [
   ['shoulder', selectors.jointShoulderInput],
   ['elbow', selectors.jointElbowInput],
@@ -718,6 +1170,7 @@ selectors.manipulatorSendButton?.addEventListener('click', sendManipulatorComman
 selectors.gripHoldButton?.addEventListener('click', handleGripHold);
 selectors.gripReleaseButton?.addEventListener('click', handleGripRelease);
 updateManipulatorUI();
+setSubstateOptions(selectors.powerStateInput?.value || 'online');
 
 const bootstrap = async () => {
   if (!auth.token) {
@@ -735,9 +1188,9 @@ bootstrap();
 const renderInsights = () => {
   const robot = getSelectedRobot();
   if (!robot) return;
-  const data = state.insights[robot.id];
+  const data = ensureMapDefaultsForRobot(robot);
   if (!data) return;
-  robot.insightsLocation = data.map?.lastKnownLocation;
+  robot.insightsLocation = data.map?.lastKnownLocation || BANGALORE_BASE;
   renderOverviewStats(robot);
   renderMapPanel(data);
   renderCharts(data);
@@ -764,53 +1217,91 @@ const setActiveTab = (tab) => {
 };
 
 const renderMapPanel = (insights) => {
-  if (!selectors.mapView || !window.L || !insights?.map) return;
-  const { lastKnownLocation, path, geofences } = insights.map;
-  if (!mapState.map) {
-    mapState.map = window.L.map('map-view');
-    mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(mapState.map);
+  if (!insights?.map) {
+    if (selectors.pathLogList) {
+      selectors.pathLogList.innerHTML = '<li>No navigation history available.</li>';
+    }
+    return;
   }
-  mapState.map.setView([lastKnownLocation.lat, lastKnownLocation.lng], 13);
-  if (mapState.pathLayer) {
-    mapState.map.removeLayer(mapState.pathLayer);
-  }
-  mapState.pathLayer = window.L.polyline(
-    path.map((point) => [point.lat, point.lng]),
-    { color: '#4cc9f0' }
-  ).addTo(mapState.map);
+  const path = ensurePathPoints(insights.map.path);
+  const lastKnownLocation = insights.map.lastKnownLocation || path[path.length - 1];
+  const geofences = insights.map.geofences;
+  if (selectors.mapView) {
+    if (window.L) {
+      if (!mapState.map) {
+        mapState.map = window.L.map('map-view');
+        mapState.tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(mapState.map);
+      }
+      if (mapState.pathLayer) {
+        mapState.map.removeLayer(mapState.pathLayer);
+      }
+      mapState.pathLayer = window.L.polyline(
+        path.map((point) => [point.lat, point.lng]),
+        { color: '#4cc9f0' }
+      ).addTo(mapState.map);
+      const bounds = window.L.latLngBounds(path.map((point) => [point.lat, point.lng]));
+      mapState.map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 });
 
-  if (mapState.marker) {
-    mapState.map.removeLayer(mapState.marker);
-  }
-  mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
+      if (mapState.marker) {
+        mapState.map.removeLayer(mapState.marker);
+      }
+      mapState.marker = window.L.marker([lastKnownLocation.lat, lastKnownLocation.lng]).addTo(mapState.map);
 
-  if (mapState.geofenceLayer) {
-    mapState.map.removeLayer(mapState.geofenceLayer);
-  }
-  if (geofences?.length) {
-    const fence = geofences[0];
-    mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
-      radius: fence.radius,
-      color: '#f72585',
-      fillOpacity: 0.08
-    }).addTo(mapState.map);
+      if (Array.isArray(mapState.markers)) {
+        mapState.markers.forEach((markerInstance) => mapState.map.removeLayer(markerInstance));
+      }
+      mapState.markers = [];
+      path.forEach((point, index) => {
+        const isLast = index === path.length - 1;
+        const marker = window.L.circleMarker([point.lat, point.lng], {
+          radius: isLast ? 6 : 4,
+          color: isLast ? '#f72585' : '#0ea5e9',
+          weight: 2,
+          fillColor: isLast ? '#f72585' : '#4cc9f0',
+          fillOpacity: 1
+        }).addTo(mapState.map);
+        const tooltipLabel =
+          point.label || `${point.lat.toFixed(3)}, ${point.lng.toFixed(3)}`;
+        marker.bindTooltip(tooltipLabel, {
+          permanent: true,
+          direction: 'top',
+          className: 'path-label'
+        });
+        mapState.markers.push(marker);
+      });
+
+      if (mapState.geofenceLayer) {
+        mapState.map.removeLayer(mapState.geofenceLayer);
+      }
+      if (geofences?.length) {
+        const fence = geofences[0];
+        mapState.geofenceLayer = window.L.circle([fence.lat, fence.lng], {
+          radius: fence.radius,
+          color: '#f72585',
+          fillOpacity: 0.08
+        }).addTo(mapState.map);
+      }
+
+      setTimeout(() => mapState.map.invalidateSize(), 250);
+    } else {
+      selectors.mapView.innerHTML = buildFallbackMapMarkup(path, lastKnownLocation, geofences);
+    }
   }
 
-  selectors.pathLogList.innerHTML = path
-    .slice()
-    .reverse()
-    .map(
-      (point) =>
-        `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${point.lat.toFixed(
-          4
-        )}, ${point.lng.toFixed(4)}</li>`
-    )
-    .join('');
-
-  setTimeout(() => mapState.map.invalidateSize(), 250);
+  if (selectors.pathLogList) {
+    const logEntries = path
+      .slice()
+      .reverse()
+      .map(
+        (point) =>
+          `<li><strong>${new Date(point.timestamp).toLocaleTimeString()}</strong> · ${formatPathPointLabel(point)}</li>`
+      )
+      .join('');
+    selectors.pathLogList.innerHTML = logEntries || '<li>No navigation history available.</li>';
+  }
 };
 
 const renderCharts = (insights) => {
